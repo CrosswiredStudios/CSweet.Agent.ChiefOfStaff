@@ -2,7 +2,7 @@
   "manifestVersion": "1.0",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
