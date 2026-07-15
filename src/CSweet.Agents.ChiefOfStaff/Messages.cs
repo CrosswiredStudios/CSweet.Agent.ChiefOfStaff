@@ -11,7 +11,8 @@ public sealed record AssistantCapabilityInput(
     Guid ProviderProfileId,
     string ConversationId,
     string Prompt,
-    IReadOnlyDictionary<string, string>? Context);
+    IReadOnlyDictionary<string, string>? Context,
+    string? UserId = null);
 
 public sealed record AssistantResponseCreated(
     string ConversationId,

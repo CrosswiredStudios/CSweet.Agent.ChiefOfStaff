@@ -36,7 +36,11 @@
     "conversation.read",
     "conversation.respond",
     "capability.request",
-    "action.propose"
+    "action.propose",
+    "memory.business.read",
+    "memory.business.propose",
+    "memory.user.read",
+    "memory.user.propose"
   ],
   "requestedNetworkAccess": []
 }

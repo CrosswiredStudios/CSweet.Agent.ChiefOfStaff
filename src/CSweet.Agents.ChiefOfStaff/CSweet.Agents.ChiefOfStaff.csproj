@@ -8,8 +8,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CSweet.Agent.SDK" Version="0.1.0" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\memory\src\CSweet.Memory\CSweet.Memory.csproj" />
+    <ProjectReference Include="..\..\memory\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
+    <ProjectReference Include="..\..\memory\src\CSweet.Memory.CSweet\CSweet.Memory.CSweet.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\csweet-agent.json" Link="csweet-agent.json" CopyToOutputDirectory="PreserveNewest" />

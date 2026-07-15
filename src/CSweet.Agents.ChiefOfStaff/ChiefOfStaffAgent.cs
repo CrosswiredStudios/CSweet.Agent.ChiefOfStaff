@@ -6,6 +6,8 @@ using Google.Protobuf;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using CSweet.Memory;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
@@ -126,7 +128,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     incoming.ProviderProfileId,
                     conversationId,
                     incoming.Message,
-                    incoming.Context),
+                    incoming.Context,
+                    incoming.UserId),
                 ChiefOfStaffProfile.ConverseCapability,
                 context,
                 cancellationToken))
@@ -375,9 +378,29 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             input.ProviderProfileId,
             input.ConversationId);
 
+        var memoryOptions = Options.Create(new AgentMemoryOptions
+        {
+            DefaultScope = MemoryScope.User,
+            ContextTokenBudget = 2_000,
+            StoreAssistantMessages = true,
+            FailOpen = true
+        });
+        var memoryStore = new CSweetBrokerMemoryStore(runtimeContext.Broker);
+        var memoryEngine = new MemoryEngine(memoryStore, memoryOptions);
+        var memoryProvider = new AgentMemoryContextProvider(
+            memoryEngine,
+            new SessionStateMemoryPartitionResolver(memoryOptions),
+            memoryOptions);
+
         AIAgent agent = new ChatClientAgent(
             chatClient,
-            instructions: ChiefOfStaffProfile.SystemPrompt);
+            new ChatClientAgentOptions
+            {
+                Id = ChiefOfStaffProfile.AgentId,
+                Name = "C-Sweet Chief of Staff",
+                ChatOptions = new ChatOptions { Instructions = ChiefOfStaffProfile.SystemPrompt },
+                AIContextProviders = [memoryProvider]
+            });
 
         var prompt = capability switch
         {
@@ -389,6 +412,14 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         };
 
         AgentSession session = await agent.CreateSessionAsync(cancellationToken);
+        session.ConfigureMemory(
+            new MemoryPartition(
+                runtimeContext.BusinessId,
+                runtimeContext.InstallationId,
+                ChiefOfStaffProfile.AgentId,
+                input.UserId ?? ResolveUserId(input.Context),
+                input.ConversationId),
+            MemoryScope.User);
 
         _logger.LogInformation(
             "Chief of Staff starting MAF streaming for conversation {ConversationId}. Capability {Capability}. PromptLength {PromptLength}.",
@@ -409,6 +440,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             }
         }
     }
+
+    private static string? ResolveUserId(IReadOnlyDictionary<string, string>? context) =>
+        context is not null && context.TryGetValue("userId", out var userId) && !string.IsNullOrWhiteSpace(userId)
+            ? userId
+            : null;
 
     private async Task<AssistantResponseCreated> GenerateResponseAsync(
         AssistantCapabilityInput input,
