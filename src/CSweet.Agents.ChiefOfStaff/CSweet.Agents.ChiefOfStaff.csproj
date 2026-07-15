@@ -7,17 +7,63 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CSweet.Agent.SDK" Version="0.1.0" />
+    <PackageReference Include="CSweet.Agent.SDK" Version="0.1.0" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />
+    <PackageReference Include="CSweet.Memory" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
+    <PackageReference Include="CSweet.Memory.Broker" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
+    <PackageReference Include="CSweet.Memory.MicrosoftAgentFramework" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory\CSweet.Memory.csproj" />
-    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
-    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory.Broker\CSweet.Memory.Broker.csproj" />
+  <ItemGroup Condition="'$(UseLocalCSweetMemory)' == 'true'">
+    <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory\CSweet.Memory.csproj" />
+    <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory.Broker\CSweet.Memory.Broker.csproj" />
+    <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalCSweetAgentSdk)' == 'true'">
+    <ProjectReference Include="$(CSweetAgentSdkRepositoryRoot)\src\CSweet.Agent.SDK\CSweet.Agent.SDK.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\csweet-agent.json" Link="csweet-agent.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <UsingTask TaskName="IncrementAgentManifestVersion"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <ManifestPath ParameterType="System.String" Required="true" />
+      <NewVersion ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var json = File.ReadAllText(ManifestPath);
+      var pattern = "(\"version\"\\s*:\\s*\")(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<build>\\d+)\"";
+        var versionPattern = new Regex(pattern);
+        var match = versionPattern.Match(json);
+
+      if (!match.Success || !int.TryParse(match.Groups["build"].Value, out var build))
+        {
+        Log.LogError("Manifest version must have three numeric components.");
+            return false;
+        }
+
+      NewVersion = $"{match.Groups["major"].Value}.{match.Groups["minor"].Value}.{build + 1}";
+  var updatedJson = versionPattern.Replace(json, versionMatch => $"{versionMatch.Groups[1].Value}{NewVersion}\"", 1);
+
+        File.WriteAllText(ManifestPath, updatedJson, new UTF8Encoding(false));
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="IncrementAgentManifestVersionBeforeBuild"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <IncrementAgentManifestVersion ManifestPath="$(MSBuildProjectDirectory)\..\..\csweet-agent.json">
+      <Output TaskParameter="NewVersion" PropertyName="AgentManifestVersion" />
+    </IncrementAgentManifestVersion>
+    <Message Importance="high" Text="Agent manifest version bumped to $(AgentManifestVersion)." />
+  </Target>
 </Project>
