@@ -12,9 +12,9 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\memory\src\CSweet.Memory\CSweet.Memory.csproj" />
-    <ProjectReference Include="..\..\memory\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
-    <ProjectReference Include="..\..\memory\src\CSweet.Memory.CSweet\CSweet.Memory.CSweet.csproj" />
+    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory\CSweet.Memory.csproj" />
+    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
+    <ProjectReference Include="..\..\..\CSweet.Memory\src\CSweet.Memory.Broker\CSweet.Memory.Broker.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\csweet-agent.json" Link="csweet-agent.json" CopyToOutputDirectory="PreserveNewest" />

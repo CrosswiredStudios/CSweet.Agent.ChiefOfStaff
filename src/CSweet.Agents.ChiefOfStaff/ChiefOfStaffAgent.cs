@@ -386,7 +386,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             FailOpen = true
         });
         var memoryStore = new CSweetBrokerMemoryStore(runtimeContext.Broker);
-        var memoryEngine = new MemoryEngine(memoryStore, memoryOptions);
+        var memoryEngine = new MemoryEngine(
+            memoryStore,
+            memoryOptions,
+            authorizer: new DelegatedMemoryScopeAuthorizer(),
+            namespaceResolver: new WorkContextMemoryNamespaceResolver());
         var memoryProvider = new AgentMemoryContextProvider(
             memoryEngine,
             new SessionStateMemoryPartitionResolver(memoryOptions),
@@ -419,7 +423,16 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 ChiefOfStaffProfile.AgentId,
                 input.UserId ?? ResolveUserId(input.Context),
                 input.ConversationId),
-            MemoryScope.User);
+            MemoryScope.User,
+            new MemoryPrincipal(
+                runtimeContext.BusinessId,
+                ChiefOfStaffProfile.AgentId,
+                ChiefOfStaffProfile.AgentId,
+                runtimeContext.InstallationId,
+                Attributes: new Dictionary<string, string>
+                {
+                    ["memory.maxSensitivity"] = MemorySensitivity.Personal.ToString()
+                }));
 
         _logger.LogInformation(
             "Chief of Staff starting MAF streaming for conversation {ConversationId}. Capability {Capability}. PromptLength {PromptLength}.",
