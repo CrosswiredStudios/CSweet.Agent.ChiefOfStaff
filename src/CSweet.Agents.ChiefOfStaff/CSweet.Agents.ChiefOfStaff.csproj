@@ -8,9 +8,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CSweet.Agent.SDK" Version="0.1.0" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />
-    <PackageReference Include="CSweet.Memory" Version="0.1.0" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
-    <PackageReference Include="CSweet.Memory.Broker" Version="0.1.0" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
-    <PackageReference Include="CSweet.Memory.MicrosoftAgentFramework" Version="0.1.0" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
+    <PackageReference Include="CSweet.Memory" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
+    <PackageReference Include="CSweet.Memory.Broker" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
+    <PackageReference Include="CSweet.Memory.MicrosoftAgentFramework" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
   </ItemGroup>
