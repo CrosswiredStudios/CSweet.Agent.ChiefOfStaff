@@ -30,4 +30,18 @@ public sealed class ChiefOfStaffProfileTests
                 .GetProperty("defaultActivationMode")
                 .GetString());
     }
+
+    [Fact]
+    public void RootManifest_VersionMatchesImplementationVersion()
+    {
+        var manifestPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "csweet-agent.json"));
+        using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+
+        Assert.Equal(
+            ChiefOfStaffProfile.Version,
+            manifest.RootElement.GetProperty("version").GetString());
+    }
 }
