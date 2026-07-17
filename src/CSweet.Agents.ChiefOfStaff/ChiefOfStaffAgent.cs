@@ -15,18 +15,22 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
 {
     private readonly IAgentLlmClientFactory? _llmClientFactory;
     private readonly ILogger<ChiefOfStaffAgent> _logger;
+    private readonly ChiefOfStaffOrchestrator _orchestrator;
 
-    public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger)
+    public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger, ChiefOfStaffOrchestrator orchestrator)
     {
         _logger = logger;
+        _orchestrator = orchestrator;
     }
 
     public ChiefOfStaffAgent(
         IAgentLlmClientFactory llmClientFactory,
-        ILogger<ChiefOfStaffAgent> logger)
+        ILogger<ChiefOfStaffAgent> logger,
+        ChiefOfStaffOrchestrator orchestrator)
     {
         _llmClientFactory = llmClientFactory;
         _logger = logger;
+        _orchestrator = orchestrator;
     }
 
     public override string AgentId => ChiefOfStaffProfile.AgentId;
@@ -87,10 +91,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(
-                message.EventType,
-                ChiefOfStaffProfile.UserMessageReceivedEvent,
-                StringComparison.Ordinal))
+        if (string.Equals(message.EventType, ManagementEvents.ReviewDue, StringComparison.Ordinal))
+        {
+            await HandleManagementReviewAsync(message, context, cancellationToken);
+            return;
+        }
+
+        if (!string.Equals(message.EventType, ChiefOfStaffProfile.UserMessageReceivedEvent, StringComparison.Ordinal))
         {
             return;
         }
@@ -129,7 +136,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     conversationId,
                     incoming.Message,
                     incoming.Context,
-                    incoming.UserId),
+                    incoming.UserId,
+                    incoming.MessageId),
                 ChiefOfStaffProfile.ConverseCapability,
                 context,
                 cancellationToken))
@@ -261,6 +269,14 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 $"Capability '{request.Capability}' is not supported by the Chief of Staff.");
         }
 
+        if (request.Capability == ChiefOfStaffProfile.ManagementCheckInCapability)
+        {
+            var checkIn = DeserializePayload<ManagementCheckInRequest>(request.Payload);
+            if (checkIn is null) return AgentCapabilityExecutionResult.Failure("The management check-in input is invalid.");
+            var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+            return AgentCapabilityExecutionResult.Success(SerializePayload(ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext)));
+        }
+
         var input = DeserializePayload<AssistantCapabilityInput>(request.Payload);
 
         if (input is null ||
@@ -373,6 +389,9 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             ? new BrokerLlmClient(runtimeContext.Broker, selection)
             : await _llmClientFactory.CreateChatClientAsync(selection, cancellationToken);
 
+        var operatingContext = await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
+        await _orchestrator.CaptureExplicitFactsAsync(chatClient, input, operatingContext, runtimeContext, cancellationToken);
+
         _logger.LogInformation(
             "Chief of Staff created chat client for provider {ProviderProfileId} and conversation {ConversationId}.",
             input.ProviderProfileId,
@@ -406,14 +425,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 AIContextProviders = [memoryProvider]
             });
 
-        var prompt = capability switch
-        {
-            ChiefOfStaffProfile.SummarizeActivityCapability =>
-                $"Summarize the relevant company activity for the executive.\n\n{input.Prompt}",
-            ChiefOfStaffProfile.PlanWorkCapability =>
-                $"Create a practical work plan. Identify required capabilities, risks, approvals, and next steps.\n\n{input.Prompt}",
-            _ => input.Prompt
-        };
+        var prompt = _orchestrator.BuildGroundedPrompt(input.Prompt, capability, operatingContext, Settings);
 
         AgentSession session = await agent.CreateSessionAsync(cancellationToken);
         session.ConfigureMemory(
@@ -482,7 +494,29 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     private static bool IsSupportedCapability(string capability) =>
         capability is ChiefOfStaffProfile.ConverseCapability or
             ChiefOfStaffProfile.SummarizeActivityCapability or
-            ChiefOfStaffProfile.PlanWorkCapability;
+            ChiefOfStaffProfile.PlanWorkCapability or
+            ChiefOfStaffProfile.ManagementCheckInCapability;
+
+    private async Task HandleManagementReviewAsync(DeliveredEvent message, AgentRuntimeContext context, CancellationToken cancellationToken)
+    {
+        var due = DeserializePayload<ManagementReviewDueEvent>(message.Payload);
+        if (due is null) { _logger.LogWarning("Ignored malformed management review event {EventId}.", message.EventId); return; }
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var checkIn = new ManagementCheckInRequest(due.CycleId, due.ReviewType, due.PeriodStart, due.PeriodEnd, [],
+            ["outcomes", "blockers", "staffing", "budget", "decisions"], due.DueAt)
+        {
+            RequestId = due.RequestId
+        };
+        var report = ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext);
+        await context.Broker.PublishEventAsync(new PublishEvent
+        {
+            EventType = ManagementEvents.StatusReported,
+            SchemaVersion = "1",
+            Subject = $"management-cycle/{due.CycleId}",
+            ContentType = "application/json",
+            Payload = ByteString.CopyFrom(SerializePayload(report))
+        }, message.EventId, cancellationToken);
+    }
 
     private static Task WriteRunLogAsync(
         Guid providerProfileId,

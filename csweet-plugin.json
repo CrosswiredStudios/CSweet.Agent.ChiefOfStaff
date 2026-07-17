@@ -1,0 +1,75 @@
+{
+  "manifestVersion": "1.0",
+  "kind": "agent",
+  "id": "com.csweet.chief-of-staff",
+  "name": "C-Sweet Chief of Staff",
+  "version": "1.1.0",
+  "publisher": { "id": "com.csweet", "name": "C-Sweet" },
+  "runtime": {
+    "type": "dotnet-project",
+    "projectPath": "src/CSweet.Agents.ChiefOfStaff/CSweet.Agents.ChiefOfStaff.csproj",
+    "targetFramework": "net10.0",
+    "defaultActivationMode": "AlwaysOn",
+    "supportsMultipleInstallations": true,
+    "maximumConcurrentJobs": 20
+  },
+  "protocol": { "minimumVersion": "1.0", "maximumVersion": "1.x" },
+  "provides": [
+    { "name": "assistant.converse.v1" },
+    { "name": "assistant.summarize-activity.v1" },
+    { "name": "assistant.plan-work.v1" },
+    { "name": "management.check-in.v1" },
+    { "name": "plugin.configuration.describe.v1" },
+    { "name": "plugin.configuration.update.v1" }
+  ],
+  "requires": [
+    { "name": "platform.llm.chat-stream.v1", "scope": "organization", "purpose": "Generate Chief of Staff responses" },
+    { "name": "platform.business-profile.read.v1", "scope": "organization", "purpose": "Ground advice in the authoritative business profile" },
+    { "name": "platform.business-profile.update-explicit.v1", "scope": "organization", "purpose": "Save low-risk facts explicitly supplied by the owner" },
+    { "name": "platform.business-profile.propose-update.v1", "scope": "organization", "purpose": "Propose sensitive or inferred business profile changes" },
+    { "name": "platform.organization.snapshot.read.v1", "scope": "organization", "purpose": "Inspect reporting lines, workstreams, roles, and available workers" },
+    { "name": "platform.business-pattern.search.v1", "scope": "organization", "purpose": "Find stage-appropriate operating patterns" },
+    { "name": "platform.workstream.plan.propose.v1", "scope": "organization", "purpose": "Propose managed outcome workstreams" },
+    { "name": "platform.workforce.search.v1", "scope": "organization", "purpose": "Find capable current, installed, marketplace, or human resources" },
+    { "name": "platform.workforce-plan.propose.v1", "scope": "organization", "purpose": "Propose an explainable team plan for approval" },
+    { "name": "platform.finance-profile.read.v1", "scope": "organization", "purpose": "Ground staffing advice in financial goals and controls" },
+    { "name": "platform.finance-profile.propose-update.v1", "scope": "organization", "purpose": "Propose changes to financial goals or controls" },
+    { "name": "platform.budget.evaluate.v1", "scope": "organization", "purpose": "Check hard budget constraints before paid work" },
+    { "name": "platform.approval.propose.v1", "scope": "organization", "purpose": "Create separately gated action proposals" },
+    { "name": "platform.management-cycle.read.v1", "scope": "organization", "purpose": "Follow the configured management cadence" },
+    { "name": "memory.business.read.v1", "scope": "organization", "purpose": "Recall approved business context" },
+    { "name": "memory.business.propose.v1", "scope": "organization", "purpose": "Propose business memories" },
+    { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
+    { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" }
+  ],
+  "events": {
+    "subscribes": [
+      "com.csweet.user.message.received.v1",
+      "com.csweet.action.completed.v1",
+      "com.csweet.action.rejected.v1",
+      "com.csweet.approval.completed.v1",
+      "com.csweet.management.review.due.v1",
+      "com.csweet.management.status.reported.v1",
+      "com.csweet.management.resource-need.reported.v1",
+      "com.csweet.workstream.changed.v1",
+      "com.csweet.workforce-plan.decided.v1"
+    ],
+    "publishes": [
+      "com.csweet.assistant.response.created.v1",
+      "com.csweet.assistant.response.chunk.v1",
+      "com.csweet.assistant.progress.updated.v1",
+      "com.csweet.action.proposed.v1",
+      "com.csweet.management.status.reported.v1",
+      "com.csweet.management.resource-need.reported.v1"
+    ]
+  },
+  "configuration": [
+    { "key": "llmProviderId", "type": "provider", "label": "LLM provider", "required": true, "secret": false },
+    { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false }
+  ],
+  "credentials": [],
+  "webAccess": { "mode": "None", "rules": [] },
+  "ui": [
+    { "kind": "form", "id": "chief-of-staff-settings", "title": "Chief of Staff settings", "capability": "plugin.configuration.update.v1" }
+  ]
+}

@@ -1,3 +1,5 @@
+using CSweet.Agent.SDK;
+
 namespace CSweet.Agents.ChiefOfStaff;
 
 public sealed record UserMessageReceived(
@@ -5,14 +7,18 @@ public sealed record UserMessageReceived(
     string ConversationId,
     string UserId,
     string Message,
-    IReadOnlyDictionary<string, string>? Context);
+    IReadOnlyDictionary<string, string>? Context,
+    Guid TurnId = default,
+    int Attempt = 0,
+    Guid MessageId = default);
 
 public sealed record AssistantCapabilityInput(
     Guid ProviderProfileId,
     string ConversationId,
     string Prompt,
     IReadOnlyDictionary<string, string>? Context,
-    string? UserId = null);
+    string? UserId = null,
+    Guid MessageId = default);
 
 public sealed record AssistantResponseCreated(
     string ConversationId,
@@ -32,3 +38,11 @@ public sealed record AssistantResponseChunk(
     string Delta,
     bool IsFinal,
     string? Error = null);
+
+public sealed record ChiefOperatingContext(
+    BusinessProfileResponse? BusinessProfile,
+    FinancialOperatingProfileResponse? FinancialProfile,
+    OrganizationSnapshotResponse? Organization,
+    BusinessPatternSearchResponse? Patterns,
+    ManagementCycleResponse? ManagementCycle,
+    IReadOnlyList<string> UnavailableCapabilities);
