@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -40,10 +40,12 @@
     { "name": "memory.business.read.v1", "scope": "organization", "purpose": "Recall approved business context" },
     { "name": "memory.business.propose.v1", "scope": "organization", "purpose": "Propose business memories" },
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
-    { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" }
+    { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
+    { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" }
   ],
   "events": {
     "subscribes": [
+      "com.csweet.agent.onboarded.v1",
       "com.csweet.user.message.received.v1",
       "com.csweet.action.completed.v1",
       "com.csweet.action.rejected.v1",

@@ -2,6 +2,20 @@ using CSweet.Agent.SDK;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
+public sealed record AgentOnboardedEvent(
+    Guid OrganizationId,
+    Guid AgentOrganizationUserId,
+    Guid HiringOrganizationUserId,
+    Guid ConversationId,
+    DateTimeOffset OccurredAt);
+
+public sealed record SendCommunicationMessageRequest(
+    Guid ChatId,
+    string Content,
+    string IdempotencyKey);
+
+public sealed record CompleteAgentOnboardingRequest(Guid EventId);
+
 public sealed record UserMessageReceived(
     Guid ProviderProfileId,
     string ConversationId,

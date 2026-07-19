@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.1.0";
+    public const string Version = "1.2.0";
 
     public const string AgentKey = "chief-of-staff";
 
@@ -19,6 +19,12 @@ public static class ChiefOfStaffProfile
     public const string ManagementCheckInCapability = ManagementCapabilities.CheckIn;
 
     public const string ConfigurationSchemaVersion = "1.0";
+
+    public const string OnboardedEvent = "com.csweet.agent.onboarded.v1";
+
+    public const string SendCommunicationMessageCapability = "communication.message.send.v1";
+
+    public const string CompleteOnboardingCapability = "agent.onboarding.complete.v1";
 
     public const string UserMessageReceivedEvent = "com.csweet.user.message.received.v1";
 

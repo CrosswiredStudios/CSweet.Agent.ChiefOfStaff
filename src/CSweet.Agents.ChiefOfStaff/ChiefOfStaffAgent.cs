@@ -91,6 +91,12 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        if (string.Equals(message.EventType, ChiefOfStaffProfile.OnboardedEvent, StringComparison.Ordinal))
+        {
+            await HandleOnboardedAsync(message, context, cancellationToken);
+            return;
+        }
+
         if (string.Equals(message.EventType, ManagementEvents.ReviewDue, StringComparison.Ordinal))
         {
             await HandleManagementReviewAsync(message, context, cancellationToken);
@@ -307,6 +313,57 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return AgentCapabilityExecutionResult.Failure(
                 "The Chief of Staff could not complete the request.");
         }
+    }
+
+    private async Task HandleOnboardedAsync(
+        DeliveredEvent message,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var onboarding = DeserializePayload<AgentOnboardedEvent>(message.Payload)
+            ?? throw new InvalidOperationException("The onboarding event payload is empty.");
+        if (!Guid.TryParse(message.EventId, out var eventId) ||
+            onboarding.OrganizationId == Guid.Empty ||
+            onboarding.AgentOrganizationUserId == Guid.Empty ||
+            onboarding.HiringOrganizationUserId == Guid.Empty ||
+            onboarding.ConversationId == Guid.Empty ||
+            !string.Equals(context.BusinessId, onboarding.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The onboarding event identity is invalid for this Chief of Staff instance.");
+
+        const string openingMessage = "Thank you for hiring me as your Chief of Staff. To help me understand the project and determine which role we should hire next, could you tell me what you're building, who it's for, where the project stands today, and the most important outcome or constraint right now?";
+        var sendResult = await context.Broker.InvokeCapabilityAsync(
+            new RequestCapability
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Capability = ChiefOfStaffProfile.SendCommunicationMessageCapability,
+                ContentType = "application/json",
+                Payload = ByteString.CopyFrom(SerializePayload(new SendCommunicationMessageRequest(
+                    onboarding.ConversationId,
+                    openingMessage,
+                    $"agent-onboarded:{message.EventId}")))
+            },
+            message.EventId,
+            cancellationToken);
+        if (!sendResult.Succeeded)
+            throw new InvalidOperationException($"The Chief of Staff could not send its onboarding message: {sendResult.Error}");
+
+        var acknowledgement = await context.Broker.InvokeCapabilityAsync(
+            new RequestCapability
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Capability = ChiefOfStaffProfile.CompleteOnboardingCapability,
+                ContentType = "application/json",
+                Payload = ByteString.CopyFrom(SerializePayload(new CompleteAgentOnboardingRequest(eventId)))
+            },
+            message.EventId,
+            cancellationToken);
+        if (!acknowledgement.Succeeded)
+            throw new InvalidOperationException($"The Chief of Staff could not acknowledge onboarding: {acknowledgement.Error}");
+
+        _logger.LogInformation(
+            "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
+            message.EventId,
+            onboarding.ConversationId);
     }
 
     private static Task PublishChunkAsync(
