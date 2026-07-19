@@ -19,8 +19,8 @@
     { "name": "assistant.summarize-activity.v1" },
     { "name": "assistant.plan-work.v1" },
     { "name": "management.check-in.v1" },
-    { "name": "plugin.configuration.describe.v1" },
-    { "name": "plugin.configuration.update.v1" }
+    { "name": "agent.configuration.describe.v1" },
+    { "name": "agent.configuration.update.v1" }
   ],
   "requires": [
     { "name": "platform.llm.chat-stream.v1", "scope": "organization", "purpose": "Generate Chief of Staff responses" },
@@ -72,6 +72,6 @@
   "credentials": [],
   "webAccess": { "mode": "None", "rules": [] },
   "ui": [
-    { "kind": "form", "id": "chief-of-staff-settings", "title": "Chief of Staff settings", "capability": "plugin.configuration.update.v1" }
+    { "kind": "form", "id": "chief-of-staff-settings", "title": "Chief of Staff settings", "capability": "agent.configuration.update.v1" }
   ]
 }
