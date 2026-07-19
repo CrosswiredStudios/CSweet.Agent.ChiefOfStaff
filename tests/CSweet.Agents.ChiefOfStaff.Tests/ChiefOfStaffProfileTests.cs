@@ -58,6 +58,8 @@ public sealed class ChiefOfStaffProfileTests
             .Select(x => x.GetProperty("name").GetString()).ToList();
 
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
+        Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
+        Assert.Contains(AgentConfigurationCapabilities.Update, provides);
         Assert.Contains(PlatformCapabilities.BusinessProfileRead, requires);
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
         Assert.Contains(PlatformCapabilities.BudgetEvaluate, requires);
