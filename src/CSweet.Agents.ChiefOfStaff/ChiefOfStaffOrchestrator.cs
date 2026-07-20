@@ -24,6 +24,7 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
         var finance = await TryAsync(PlatformCapabilities.FinanceProfileRead, client.ReadFinanceProfileAsync, unavailable, cancellationToken);
         var organization = await TryAsync(PlatformCapabilities.OrganizationSnapshotRead, client.ReadOrganizationSnapshotAsync, unavailable, cancellationToken);
         var cycle = await TryAsync(PlatformCapabilities.ManagementCycleRead, client.ReadManagementCycleAsync, unavailable, cancellationToken);
+        var hiringBacklog = await TryAsync(PlatformCapabilities.HiringRecommendationList, client.ListHiringRecommendationsAsync, unavailable, cancellationToken);
         BusinessPatternSearchResponse? patterns = null;
         if (business is not null)
         {
@@ -37,16 +38,16 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
                 unavailable,
                 cancellationToken);
         }
-        return new ChiefOperatingContext(business, finance, organization, patterns, cycle, unavailable);
+        return new ChiefOperatingContext(business, finance, organization, patterns, cycle, hiringBacklog, unavailable);
     }
 
     public string BuildGroundedPrompt(string userPrompt, string capability, ChiefOperatingContext context, AgentSettings settings)
     {
         var operatingInstruction = capability switch
         {
-            ChiefOfStaffProfile.SummarizeActivityCapability => "Produce an executive operating summary with outcomes, work in progress, blockers, staffing gaps, budget concerns, decisions, and next actions.",
-            ChiefOfStaffProfile.PlanWorkCapability => "Create managed workstreams with success criteria, one accountable manager each, required capabilities, team shape, budget implications, risks, approvals, and next steps.",
-            _ => "Answer the owner directly, use the authoritative context, and ask at most one high-value discovery question when needed."
+            ChiefOfStaffProfile.SummarizeActivityCapability => "Produce an executive workforce summary covering current capacity, ownership gaps, overloaded roles, hiring priorities, and staffing decisions.",
+            ChiefOfStaffProfile.PlanWorkCapability => "Create an organization and workforce plan with accountable manager roles, required capabilities, reporting structure, hiring order, budget implications, and approval points. Do not plan the underlying domain execution.",
+            _ => "Answer only within organizational design and workforce planning, use the authoritative context, and ask at most one high-value staffing discovery question when needed."
         };
         var tone = settings.GetString("responseTone") ?? "concise";
         var maxItems = settings.GetDecimal("maxPlanItems") is { } value ? (int)value : 3;

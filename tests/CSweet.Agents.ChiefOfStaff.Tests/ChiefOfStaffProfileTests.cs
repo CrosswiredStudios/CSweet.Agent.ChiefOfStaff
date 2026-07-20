@@ -67,9 +67,14 @@ public sealed class ChiefOfStaffProfileTests
         Assert.DoesNotContain(PlatformCapabilities.UserInputRequest, requires);
         Assert.Contains(PlatformCapabilities.UserInputRequest, PlatformCapabilities.Global);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
+        Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
         Assert.Contains(PlatformCapabilities.HiringWorkflowStage, requires);
         Assert.Contains("at most one high-value question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("durable personal to-do list", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("one-line role map", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("only the highest-priority unfilled role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -102,7 +107,7 @@ public sealed class ChiefOfStaffProfileTests
                 new OperatingSignal("Risk", "Medium", "Monitor support capacity after launch.")
             ]
         };
-        var context = new ChiefOperatingContext(null, null, organization, null, null, []);
+        var context = new ChiefOperatingContext(null, null, organization, null, null, null, []);
         var requestId = Guid.NewGuid();
         var request = new ManagementCheckInRequest(Guid.NewGuid(), "ExecutiveBriefing", DateTimeOffset.UtcNow.AddDays(-1),
             DateTimeOffset.UtcNow, [], [], DateTimeOffset.UtcNow.AddHours(2)) { RequestId = requestId };

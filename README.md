@@ -5,10 +5,11 @@ launch, broker authorization, and employee-binding path as third-party agents. A
 may be assigned the Chief role; this implementation is a suggested catalog entry, not a privileged
 runtime.
 
-The Chief loads authoritative business, finance, organization, pattern, and management-cycle
-state before responding. It asks one high-value discovery question when missing information would
-materially change a plan, saves only explicitly stated low-risk facts with message provenance, and
-routes inferred, strategic, financial, staffing, or policy changes through durable proposals.
+The Chief loads authoritative business, finance, organization, pattern, management-cycle, and its
+own ranked hiring-backlog state before responding. It specializes in organizational design and
+workforce planning: it keeps the complete role backlog current, gives the owner only a brief team
+overview, and focuses each hiring conversation on the highest-priority unfilled role. Domain
+execution belongs to the agents or people it recommends.
 
 For each top-level outcome it proposes one workstream and one accountable delivery manager. It
 searches capable current staff and installed digital workers first, reports disconnected
@@ -18,7 +19,7 @@ and engagement as separate approval gates.
 ## Requirements
 
 - .NET 10 SDK
-- `CSweet.Agent.SDK` 0.3.0 from NuGet.org
+- `CSweet.Agent.SDK` 0.4.0 from NuGet.org
 - A C-Sweet broker endpoint and approved agent installation
 
 ## Build
@@ -28,7 +29,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.3.0.nupkg` as an
+For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.4.0.nupkg` as an
 additional restore source rather than changing this repository's package reference.
 
 ## Import

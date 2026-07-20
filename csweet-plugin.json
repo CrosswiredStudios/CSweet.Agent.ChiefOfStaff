@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -42,6 +42,7 @@
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
     { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
     { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" }
+    ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
     ,{ "name": "platform.hiring-workflow.stage.v1", "scope": "organization", "purpose": "Stage an install-and-hire workflow for owner approval" }
   ],

@@ -68,13 +68,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 "proactivePlanning",
                 "Proactive Planning",
                 required: true,
-                description: "Allows the assistant to suggest plans and follow-up work without being explicitly asked.",
+                description: "Allows the assistant to suggest organization and staffing plans without being explicitly asked.",
                 defaultValue: true)
             .Number(
                 "maxPlanItems",
                 "Maximum Plan Items",
                 required: true,
-                description: "Caps the number of tasks the assistant proposes in a single plan.",
+                description: "Caps the number of roles the assistant proposes in a single staffing plan.",
                 minimum: 3,
                 maximum: 20,
                 step: 1,

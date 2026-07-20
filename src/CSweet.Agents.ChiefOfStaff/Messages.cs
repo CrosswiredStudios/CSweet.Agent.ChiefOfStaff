@@ -59,4 +59,5 @@ public sealed record ChiefOperatingContext(
     OrganizationSnapshotResponse? Organization,
     BusinessPatternSearchResponse? Patterns,
     ManagementCycleResponse? ManagementCycle,
+    HiringBacklogResponse? HiringBacklog,
     IReadOnlyList<string> UnavailableCapabilities);
