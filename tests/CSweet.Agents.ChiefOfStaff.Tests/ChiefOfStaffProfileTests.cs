@@ -64,7 +64,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
         Assert.Contains(PlatformCapabilities.BudgetEvaluate, requires);
         Assert.Contains(PlatformCapabilities.ManagementCycleRead, requires);
-        Assert.Contains(PlatformCapabilities.ChatDecisionCreate, requires);
+        Assert.DoesNotContain(PlatformCapabilities.UserInputRequest, requires);
+        Assert.Contains(PlatformCapabilities.UserInputRequest, PlatformCapabilities.Global);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringWorkflowStage, requires);
         Assert.Contains("at most one high-value question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);

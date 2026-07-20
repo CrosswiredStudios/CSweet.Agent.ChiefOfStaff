@@ -42,7 +42,6 @@
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
     { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
     { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" }
-    ,{ "name": "platform.chat-decision.create.v1", "scope": "organization", "purpose": "Present a structured executive decision in chat" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
     ,{ "name": "platform.hiring-workflow.stage.v1", "scope": "organization", "purpose": "Stage an install-and-hire workflow for owner approval" }
   ],
