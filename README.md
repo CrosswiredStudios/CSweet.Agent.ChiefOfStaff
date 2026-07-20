@@ -18,7 +18,7 @@ and engagement as separate approval gates.
 ## Requirements
 
 - .NET 10 SDK
-- `CSweet.Agent.SDK` 0.2.0 from NuGet.org
+- `CSweet.Agent.SDK` 0.3.0 from NuGet.org
 - A C-Sweet broker endpoint and approved agent installation
 
 ## Build
@@ -28,7 +28,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.2.0.nupkg` as an
+For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.3.0.nupkg` as an
 additional restore source rather than changing this repository's package reference.
 
 ## Import

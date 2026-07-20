@@ -48,13 +48,14 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
             ChiefOfStaffProfile.PlanWorkCapability => "Create managed workstreams with success criteria, one accountable manager each, required capabilities, team shape, budget implications, risks, approvals, and next steps.",
             _ => "Answer the owner directly, use the authoritative context, and ask at most one high-value discovery question when needed."
         };
-        var tone = settings.GetString("responseTone") ?? "balanced";
-        var maxItems = settings.GetDecimal("maxPlanItems") is { } value ? (int)value : 8;
+        var tone = settings.GetString("responseTone") ?? "concise";
+        var maxItems = settings.GetDecimal("maxPlanItems") is { } value ? (int)value : 3;
+        var maxAlternatives = settings.GetDecimal("maxAlternatives") is { } alternativeValue ? (int)alternativeValue : 2;
         var custom = settings.GetString("customInstructions");
         var nextQuestion = HighestValueDiscoveryQuestion(context.BusinessProfile, context.FinancialProfile);
         return $$"""
 {{operatingInstruction}}
-Response tone: {{tone}}. Never propose more than {{maxItems}} primary plan items.
+Response tone: {{tone}}. Never propose more than {{maxItems}} primary plan items or {{maxAlternatives}} alternatives.
 {{(string.IsNullOrWhiteSpace(custom) ? string.Empty : $"Owner configuration: {custom}")}}
 
 <authoritative_operating_context>

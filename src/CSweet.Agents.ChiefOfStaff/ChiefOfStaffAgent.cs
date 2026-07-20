@@ -63,7 +63,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 ],
                 required: true,
                 description: "Controls how much detail the assistant uses in executive responses.",
-                defaultValue: "balanced")
+                defaultValue: "concise")
             .Boolean(
                 "proactivePlanning",
                 "Proactive Planning",
@@ -78,7 +78,16 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 minimum: 3,
                 maximum: 20,
                 step: 1,
-                defaultValue: 8)
+                defaultValue: 3)
+            .Number(
+                "maxAlternatives",
+                "Maximum Alternatives",
+                required: true,
+                description: "Caps materially useful alternatives in an executive recommendation.",
+                minimum: 0,
+                maximum: 2,
+                step: 1,
+                defaultValue: 2)
             .TextArea(
                 "customInstructions",
                 "Custom Instructions",
@@ -472,13 +481,24 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             new SessionStateMemoryPartitionResolver(memoryOptions),
             memoryOptions);
 
+        var grantedPlatformCapabilities = runtimeContext.Broker.Registration?
+            .GrantedRequestedCapabilities
+            .ToHashSet(StringComparer.Ordinal)
+            ?? new HashSet<string>(StringComparer.Ordinal);
+
         AIAgent agent = new ChatClientAgent(
             chatClient,
             new ChatClientAgentOptions
             {
                 Id = ChiefOfStaffProfile.AgentId,
                 Name = "C-Sweet Chief of Staff",
-                ChatOptions = new ChatOptions { Instructions = ChiefOfStaffProfile.SystemPrompt },
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = ChiefOfStaffProfile.SystemPrompt,
+                    Tools = PlatformToolAdapters.Create(
+                        runtimeContext.Platform,
+                        grantedPlatformCapabilities).ToList()
+                },
                 AIContextProviders = [memoryProvider]
             });
 
