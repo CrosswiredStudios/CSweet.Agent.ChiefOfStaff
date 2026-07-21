@@ -97,6 +97,24 @@ public sealed class ChiefOfStaffOnboardingTests
             .GetProperty("eventId").GetGuid());
     }
 
+    [Fact]
+    public void FormatOnboardingMessage_TurnsDenseLabeledOutputIntoReadableMarkdown()
+    {
+        const string dense = """
+We are an AI-first business platform in the Idea stage.
+Role Map: Product Manager, Engineering Lead, Marketing Lead.
+Priority 1 Hire: Product Manager. Validate the target customer first.
+Who is the first specific customer you intend to serve?
+""";
+
+        var formatted = ChiefOfStaffAgent.FormatOnboardingMessage(dense);
+
+        Assert.Contains("- **Role map:** Product Manager", formatted);
+        Assert.Contains("- **Priority 1 hire:** Product Manager", formatted);
+        Assert.Contains("**Question for you**\n\nWho is the first", formatted);
+        Assert.DoesNotContain("Role Map:", formatted);
+    }
+
     private sealed class RecordingBrokerClient(BusinessProfileResponse profile) : IAgentBrokerClient
     {
         public List<RequestCapability> Requests { get; } = [];

@@ -448,7 +448,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
             if (!string.IsNullOrWhiteSpace(response.Response))
             {
-                return response.Response.Trim();
+                return FormatOnboardingMessage(response.Response);
             }
 
             _logger.LogWarning(
@@ -464,6 +464,40 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         }
 
         return fallback;
+    }
+
+    internal static string FormatOnboardingMessage(string value)
+    {
+        var lines = value.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+        if (lines.Count == 0) return string.Empty;
+
+        var sections = new List<string>(lines.Count + 2);
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("Role Map:", StringComparison.OrdinalIgnoreCase))
+            {
+                sections.Add($"- **Role map:** {line["Role Map:".Length..].Trim()}");
+                continue;
+            }
+            if (line.StartsWith("Priority 1 Hire:", StringComparison.OrdinalIgnoreCase))
+            {
+                sections.Add($"- **Priority 1 hire:** {line["Priority 1 Hire:".Length..].Trim()}");
+                continue;
+            }
+            if (line.EndsWith("?", StringComparison.Ordinal))
+            {
+                sections.Add($"**Question for you**\n\n{line}");
+                continue;
+            }
+
+            sections.Add(line);
+        }
+
+        return string.Join("\n\n", sections);
     }
 
     private static Task PublishChunkAsync(
