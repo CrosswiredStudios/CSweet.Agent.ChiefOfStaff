@@ -19,7 +19,7 @@ and engagement as separate approval gates.
 ## Requirements
 
 - .NET 10 SDK
-- `CSweet.Agent.SDK` 0.4.0 from NuGet.org
+- `CSweet.Agent.SDK` 0.5.0 from NuGet.org
 - A C-Sweet broker endpoint and approved agent installation
 
 ## Build
@@ -29,7 +29,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.4.0.nupkg` as an
+For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.5.0.nupkg` as an
 additional restore source rather than changing this repository's package reference.
 
 ## Import
@@ -39,6 +39,10 @@ approve only the requested permissions, events, and capabilities required by the
 
 The agent requests model responses through `platform.llm.chat-stream.v1`; provider credentials
 remain inside C-Sweet and are never supplied to this process.
+
+At runtime the Chief uses the employee display name assigned when it was hired. Its package name
+and package ID identify the implementation, while the C-Sweet broker supplies and enforces its
+current organization role and self-identity for every model request.
 
 The Chief also produces deterministic executive briefing Markdown after activation, after a new
 runtime instance starts, and when the platform's durable management cycle becomes due. Briefings

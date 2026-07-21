@@ -588,7 +588,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             new ChatClientAgentOptions
             {
                 Id = ChiefOfStaffProfile.AgentId,
-                Name = "C-Sweet Chief of Staff",
+                Name = runtimeContext.Identity?.DisplayName ?? ChiefOfStaffProfile.DefaultDisplayName,
                 ChatOptions = new ChatOptions
                 {
                     Instructions = ChiefOfStaffProfile.SystemPrompt,
