@@ -155,6 +155,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     incoming.MessageId),
                 ChiefOfStaffProfile.ConverseCapability,
                 context,
+                operatingContext: null,
                 cancellationToken))
             {
                 if (update.Usage is not null)
@@ -339,7 +340,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             !string.Equals(context.BusinessId, onboarding.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The onboarding event identity is invalid for this Chief of Staff instance.");
 
-        const string openingMessage = "Thank you for hiring me as your Chief of Staff. To help me understand the project and determine which role we should hire next, could you tell me what you're building, who it's for, where the project stands today, and the most important outcome or constraint right now?";
+        var openingMessage = await GenerateOnboardingMessageAsync(
+            onboarding,
+            eventId,
+            context,
+            cancellationToken);
         var sendResult = await context.Broker.InvokeCapabilityAsync(
             new RequestCapability
             {
@@ -373,6 +378,67 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
             message.EventId,
             onboarding.ConversationId);
+    }
+
+    private async Task<string> GenerateOnboardingMessageAsync(
+        AgentOnboardedEvent onboarding,
+        Guid eventId,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var fallback = ChiefOfStaffOrchestrator.BuildContextualOnboardingFallback(operatingContext);
+        var providerProfileId = Settings.GetGuid("llmProviderId");
+        if (providerProfileId is null || providerProfileId == Guid.Empty)
+        {
+            _logger.LogWarning(
+                "Chief of Staff onboarding used the contextual fallback because no LLM provider is configured for installation {InstallationId}.",
+                context.InstallationId);
+            return fallback;
+        }
+
+        const string onboardingRequest = """
+This is your first message after being hired into this business. Review the authoritative business, financial, organization, and hiring-backlog context before responding.
+
+Do not use a generic welcome or ask the owner to repeat facts already present in the business profile. If the available data is sufficient, give a brief business-specific assessment, name the compact role map, identify the single most important role to fill first and why, and begin the normal ranked-hiring-backlog workflow. If the available data is insufficient to choose the first role responsibly, state what you already understand and ask only the single highest-value clarification. Do not use a multi-part intake questionnaire.
+""";
+
+        try
+        {
+            var response = await GenerateResponseAsync(
+                new AssistantCapabilityInput(
+                    providerProfileId.Value,
+                    onboarding.ConversationId.ToString("D"),
+                    onboardingRequest,
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["userId"] = onboarding.HiringOrganizationUserId.ToString("D"),
+                        ["onboardingEventId"] = eventId.ToString("D")
+                    },
+                    onboarding.HiringOrganizationUserId.ToString("D")),
+                ChiefOfStaffProfile.ConverseCapability,
+                context,
+                cancellationToken,
+                operatingContext);
+
+            if (!string.IsNullOrWhiteSpace(response.Response))
+            {
+                return response.Response.Trim();
+            }
+
+            _logger.LogWarning(
+                "Chief of Staff onboarding generation returned no content for installation {InstallationId}.",
+                context.InstallationId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff onboarding generation failed for installation {InstallationId}; using contextual fallback.",
+                context.InstallationId);
+        }
+
+        return fallback;
     }
 
     private static Task PublishChunkAsync(
@@ -441,6 +507,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         AssistantCapabilityInput input,
         string capability,
         AgentRuntimeContext runtimeContext,
+        ChiefOperatingContext? operatingContext,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _logger.LogInformation(
@@ -455,7 +522,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             ? new BrokerLlmClient(runtimeContext.Broker, selection)
             : await _llmClientFactory.CreateChatClientAsync(selection, cancellationToken);
 
-        var operatingContext = await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
+        operatingContext ??= await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
         await _orchestrator.CaptureExplicitFactsAsync(chatClient, input, operatingContext, runtimeContext, cancellationToken);
 
         _logger.LogInformation(
@@ -552,11 +619,17 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         AssistantCapabilityInput input,
         string capability,
         AgentRuntimeContext runtimeContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ChiefOperatingContext? operatingContext = null)
     {
         var builder = new System.Text.StringBuilder();
 
-        await foreach (var update in StreamAssistantDeltasAsync(input, capability, runtimeContext, cancellationToken))
+        await foreach (var update in StreamAssistantDeltasAsync(
+            input,
+            capability,
+            runtimeContext,
+            operatingContext,
+            cancellationToken))
         {
             builder.Append(update.Delta);
         }

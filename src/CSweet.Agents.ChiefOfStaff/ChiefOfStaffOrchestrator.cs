@@ -250,6 +250,28 @@ OWNER MESSAGE:
         return null;
     }
 
+    public static string BuildContextualOnboardingFallback(ChiefOperatingContext context)
+    {
+        var profile = context.BusinessProfile;
+        var question = HighestValueDiscoveryQuestion(profile, context.FinancialProfile);
+        if (profile is null)
+        {
+            return question ?? "What type of business are you building, and what outcome should it deliver for customers?";
+        }
+
+        var identity = new List<string>();
+        if (!string.IsNullOrWhiteSpace(profile.Industry)) identity.Add($"in {profile.Industry}");
+        if (!string.IsNullOrWhiteSpace(profile.Mission)) identity.Add($"with the mission: {profile.Mission.Trim()}");
+        else if (!string.IsNullOrWhiteSpace(profile.Description)) identity.Add(profile.Description.Trim());
+        var understood = identity.Count == 0
+            ? $"I've reviewed the current profile for {profile.Name}."
+            : $"I've reviewed {profile.Name}, {string.Join(" ", identity)}.";
+
+        return question is null
+            ? $"{understood} There is enough business context to begin ranking the roles required to deliver that mission; I'll start with the single highest-impact vacancy."
+            : $"{understood} Before I rank the first role to fill, {LowercaseFirst(question)}";
+    }
+
     public static string? NormalizeStage(string? stage) => stage?.Trim().ToLowerInvariant() switch
     {
         "idea" => "Idea",
@@ -263,6 +285,11 @@ OWNER MESSAGE:
         "exit" => "Exit",
         _ => stage
     };
+
+    private static string LowercaseFirst(string value) =>
+        string.IsNullOrEmpty(value) || char.IsLower(value[0])
+            ? value
+            : char.ToLowerInvariant(value[0]) + value[1..];
 
     private async Task<T?> TryAsync<T>(string capability, Func<CancellationToken, Task<T>> action, List<string> unavailable, CancellationToken token)
         where T : class

@@ -4,6 +4,7 @@ using CSweet.Agent.Contracts.Grpc;
 using CSweet.Agent.SDK;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CSweet.Agents.ChiefOfStaff.Tests;
@@ -11,17 +12,58 @@ namespace CSweet.Agents.ChiefOfStaff.Tests;
 public sealed class ChiefOfStaffOnboardingTests
 {
     [Fact]
-    public async Task OnboardedEvent_SendsAgentOwnedMessageThenAcknowledges()
+    public async Task OnboardedEvent_GeneratesBusinessGroundedMessageThenAcknowledges()
     {
         var organizationId = Guid.NewGuid();
         var agentId = Guid.NewGuid();
         var hiringUserId = Guid.NewGuid();
         var conversationId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
-        var broker = new RecordingBrokerClient();
+        var profile = new BusinessProfileResponse(
+            organizationId,
+            "Trailwise",
+            "Marketplace",
+            "Outdoor recreation",
+            "A marketplace for guided outdoor trips.",
+            "Make expert-led outdoor experiences accessible to new adventurers.",
+            "Validation",
+            ["New outdoor enthusiasts"],
+            ["Guided trip bookings"],
+            "Booking commission",
+            ["United States"],
+            null,
+            [],
+            [],
+            "Moderate",
+            "America/Los_Angeles",
+            1,
+            0.8m,
+            new Dictionary<string, ProfileFieldProvenance>());
+        var broker = new RecordingBrokerClient(profile);
+        var chatClient = new RecordingChatClient(
+            "Trailwise should first hire a Marketplace Product Manager to own validation and coordinate the later engineering, supply, and QA roles.");
+        var providerId = Guid.NewGuid();
         var agent = new ChiefOfStaffAgent(
+            new RecordingLlmClientFactory(chatClient),
             NullLogger<ChiefOfStaffAgent>.Instance,
             new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+        var runtimeContext = new AgentRuntimeContext(
+            organizationId.ToString("D"), Guid.NewGuid().ToString("D"), broker);
+        var configuration = await agent.ExecuteCapabilityAsync(
+            new CapabilityRequest
+            {
+                Capability = AgentConfigurationCapabilities.Update,
+                Payload = ByteString.CopyFrom(JsonSerializer.SerializeToUtf8Bytes(
+                    new UpdateAgentConfigurationRequest(new Dictionary<string, JsonElement>
+                    {
+                        ["llmProviderId"] = JsonSerializer.SerializeToElement(providerId.ToString("D")),
+                        ["llmModel"] = JsonSerializer.SerializeToElement("test-model")
+                    }),
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+            },
+            runtimeContext,
+            CancellationToken.None);
+        Assert.True(configuration.Succeeded, configuration.Error);
         var message = new DeliveredEvent
         {
             EventId = eventId.ToString("N"),
@@ -32,24 +74,30 @@ public sealed class ChiefOfStaffOnboardingTests
             OccurredAt = Timestamp.FromDateTime(DateTime.UtcNow)
         };
 
-        await agent.HandleEventAsync(message, new AgentRuntimeContext(
-            organizationId.ToString("D"), Guid.NewGuid().ToString("D"), broker), CancellationToken.None);
+        await agent.HandleEventAsync(message, runtimeContext, CancellationToken.None);
 
-        Assert.Equal(2, broker.Requests.Count);
-        var send = broker.Requests[0];
-        Assert.Equal(ChiefOfStaffProfile.SendCommunicationMessageCapability, send.Capability);
+        var send = Assert.Single(
+            broker.Requests,
+            request => request.Capability == ChiefOfStaffProfile.SendCommunicationMessageCapability);
         var sendPayload = JsonDocument.Parse(send.Payload.ToByteArray()).RootElement;
         Assert.Equal(conversationId, sendPayload.GetProperty("chatId").GetGuid());
-        Assert.Contains("determine which role we should hire next", sendPayload.GetProperty("content").GetString());
+        Assert.Contains("Trailwise", sendPayload.GetProperty("content").GetString());
+        Assert.Contains("Marketplace Product Manager", sendPayload.GetProperty("content").GetString());
+        Assert.DoesNotContain("Thank you for hiring me", sendPayload.GetProperty("content").GetString());
         Assert.Equal($"agent-onboarded:{eventId:N}", sendPayload.GetProperty("idempotencyKey").GetString());
+        var groundedPrompt = string.Join("\n", chatClient.Messages.Select(message => message.Text));
+        Assert.Contains("Trailwise", groundedPrompt);
+        Assert.Contains("Outdoor recreation", groundedPrompt);
+        Assert.Contains("Make expert-led outdoor experiences accessible", groundedPrompt);
 
-        var acknowledgement = broker.Requests[1];
-        Assert.Equal(ChiefOfStaffProfile.CompleteOnboardingCapability, acknowledgement.Capability);
+        var acknowledgement = Assert.Single(
+            broker.Requests,
+            request => request.Capability == ChiefOfStaffProfile.CompleteOnboardingCapability);
         Assert.Equal(eventId, JsonDocument.Parse(acknowledgement.Payload.ToByteArray()).RootElement
             .GetProperty("eventId").GetGuid());
     }
 
-    private sealed class RecordingBrokerClient : IAgentBrokerClient
+    private sealed class RecordingBrokerClient(BusinessProfileResponse profile) : IAgentBrokerClient
     {
         public List<RequestCapability> Requests { get; } = [];
 
@@ -59,6 +107,30 @@ public sealed class ChiefOfStaffOnboardingTests
             CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            if (request.Capability == PlatformCapabilities.BusinessProfileRead)
+            {
+                return Task.FromResult(new CapabilityResult
+                {
+                    RequestId = request.RequestId,
+                    Succeeded = true,
+                    ContentType = "application/json",
+                    Payload = ByteString.CopyFrom(JsonSerializer.SerializeToUtf8Bytes(
+                        profile,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+                });
+            }
+
+            if (request.Capability != ChiefOfStaffProfile.SendCommunicationMessageCapability &&
+                request.Capability != ChiefOfStaffProfile.CompleteOnboardingCapability)
+            {
+                return Task.FromResult(new CapabilityResult
+                {
+                    RequestId = request.RequestId,
+                    Succeeded = false,
+                    Error = "Capability unavailable in test."
+                });
+            }
+
             return Task.FromResult(new CapabilityResult
             {
                 RequestId = request.RequestId,
@@ -86,5 +158,40 @@ public sealed class ChiefOfStaffOnboardingTests
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class RecordingLlmClientFactory(RecordingChatClient client) : IAgentLlmClientFactory
+    {
+        public Task<IChatClient> CreateChatClientAsync(
+            AgentLlmSelection selection,
+            CancellationToken cancellationToken = default) => Task.FromResult<IChatClient>(client);
+    }
+
+    private sealed class RecordingChatClient(string response) : IChatClient
+    {
+        public IReadOnlyList<ChatMessage> Messages { get; private set; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, response)));
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            Messages = messages.ToList();
+            await Task.Yield();
+            yield return new ChatResponseUpdate(ChatRole.Assistant, response);
+        }
+
+        public object? GetService(System.Type serviceType, object? serviceKey = null) =>
+            serviceType.IsInstanceOfType(this) ? this : null;
+
+        public void Dispose()
+        {
+        }
     }
 }

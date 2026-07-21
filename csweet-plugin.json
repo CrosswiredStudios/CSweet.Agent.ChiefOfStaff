@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",

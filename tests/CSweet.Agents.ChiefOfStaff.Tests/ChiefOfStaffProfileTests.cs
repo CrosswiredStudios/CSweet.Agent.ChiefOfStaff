@@ -94,6 +94,40 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
+    public void ContextualOnboardingFallback_UsesKnownBusinessFactsAndOneMissingFact()
+    {
+        var profile = new BusinessProfileResponse(
+            Guid.NewGuid(),
+            "Trailwise",
+            "Marketplace",
+            "Outdoor recreation",
+            null,
+            "Make expert-led outdoor experiences accessible.",
+            "Validation",
+            [],
+            ["Guided trip bookings"],
+            "Booking commission",
+            ["United States"],
+            null,
+            [],
+            [],
+            null,
+            "UTC",
+            1,
+            0.6m,
+            new Dictionary<string, ProfileFieldProvenance>());
+        var context = new ChiefOperatingContext(profile, null, null, null, null, null, []);
+
+        var message = ChiefOfStaffOrchestrator.BuildContextualOnboardingFallback(context);
+
+        Assert.Contains("Trailwise", message);
+        Assert.Contains("Outdoor recreation", message);
+        Assert.Contains("Make expert-led outdoor experiences accessible", message);
+        Assert.Contains("who is the first specific customer", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("what you're building", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ManagementReport_ProducesPrioritizedConciseMarkdown()
     {
         var organization = new OrganizationSnapshotResponse(
