@@ -51,7 +51,11 @@ public sealed record AssistantResponseChunk(
     int Sequence,
     string Delta,
     bool IsFinal,
-    string? Error = null);
+    string? Error = null,
+    Guid TurnId = default,
+    string Kind = "output",
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    int Attempt = 0);
 
 public sealed record ChiefOperatingContext(
     BusinessProfileResponse? BusinessProfile,

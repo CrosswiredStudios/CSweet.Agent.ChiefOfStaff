@@ -136,6 +136,19 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var sequence = 0;
 
+        await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
+            conversationId,
+            sequence++,
+            "Chief of Staff accepted the request.",
+            IsFinal: false,
+            TurnId: incoming.TurnId,
+            Kind: "progress",
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["stage"] = "accepted"
+            },
+            Attempt: incoming.Attempt), cancellationToken);
+
         _logger.LogInformation(
             "Chief of Staff received user message event {EventId} for conversation {ConversationId}. Provider {ProviderProfileId}. MessageLength {MessageLength}.",
             message.EventId,
@@ -180,7 +193,9 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     conversationId,
                     sequence++,
                     update.Delta,
-                    IsFinal: false), cancellationToken);
+                    IsFinal: false,
+                    TurnId: incoming.TurnId,
+                    Attempt: incoming.Attempt), cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -200,6 +215,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 conversationId,
                 sequence,
                 BuildSafeFailureMessage(exception),
+                incoming.TurnId,
+                incoming.Attempt,
                 cancellationToken);
             await WriteRunLogAsync(
                 incoming.ProviderProfileId,
@@ -226,6 +243,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 conversationId,
                 sequence,
                 "The Chief of Staff could not complete the request because the model provider returned an empty response.",
+                incoming.TurnId,
+                incoming.Attempt,
                 cancellationToken);
             await WriteRunLogAsync(
                 incoming.ProviderProfileId,
@@ -241,7 +260,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         }
 
         await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
-            conversationId, sequence, Delta: string.Empty, IsFinal: true), cancellationToken);
+            conversationId,
+            sequence,
+            Delta: string.Empty,
+            IsFinal: true,
+            TurnId: incoming.TurnId,
+            Kind: "final",
+            Attempt: incoming.Attempt), cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed streaming for conversation {ConversationId}. Chunks {ChunkCount}. ResponseLength {ResponseLength}.",
@@ -466,6 +491,8 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         string conversationId,
         int sequence,
         string message,
+        Guid turnId,
+        int attempt,
         CancellationToken cancellationToken)
     {
         return PublishChunkAsync(context, correlationId, new AssistantResponseChunk(
@@ -473,7 +500,10 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             sequence,
             message,
             IsFinal: true,
-            Error: "agent_error"), cancellationToken);
+            Error: "agent_error",
+            TurnId: turnId,
+            Kind: "error",
+            Attempt: attempt), cancellationToken);
     }
 
     private static string BuildSafeFailureMessage(Exception exception)
