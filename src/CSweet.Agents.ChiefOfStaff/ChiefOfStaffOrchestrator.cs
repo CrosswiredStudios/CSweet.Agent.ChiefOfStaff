@@ -272,6 +272,123 @@ OWNER MESSAGE:
             : $"{understood} Before I rank the first role to fill, {LowercaseFirst(question)}";
     }
 
+    public static ProductRoleBriefResponse BuildProductRoleBrief(
+        ChiefOperatingContext context,
+        Guid chiefOrganizationUserId,
+        Guid productManagerOrganizationUserId)
+    {
+        var profile = context.BusinessProfile;
+        var organization = context.Organization;
+        var gaps = new List<ProductRoleBriefGap>();
+        if (profile is null)
+        {
+            gaps.Add(new ProductRoleBriefGap(
+                "business",
+                "What business and customer outcome should this Product Manager own first?",
+                "A product mandate cannot be set responsibly without the business and intended outcome."));
+        }
+        else
+        {
+            if (profile.TargetCustomers.Count == 0)
+                gaps.Add(new ProductRoleBriefGap(
+                    "target-customer",
+                    "Which specific customer segment should the Product Manager serve first?",
+                    "The target customer changes discovery, prioritization, success measures, and team design."));
+            if (profile.Offerings.Count == 0)
+                gaps.Add(new ProductRoleBriefGap(
+                    "initial-offering",
+                    "What first product or customer outcome should the Product Manager be accountable for?",
+                    "The initial offering defines the product boundary and required delivery capabilities."));
+            if (string.IsNullOrWhiteSpace(profile.Mission) && string.IsNullOrWhiteSpace(profile.Description))
+                gaps.Add(new ProductRoleBriefGap(
+                    "product-mandate",
+                    "What mission or business outcome should guide product decisions?",
+                    "The Product Manager needs an explicit outcome to resolve priority tradeoffs."));
+        }
+        if (context.FinancialProfile?.MaximumMonthlyWorkforceSpend is null)
+            gaps.Add(new ProductRoleBriefGap(
+                "workforce-budget",
+                "What maximum monthly workforce spend should constrain the initial product team?",
+                "Team structure and hiring order must respect a hard workforce limit."));
+
+        var outcomes = organization?.Objectives
+            .Where(x => x.Status is not ("Completed" or "Cancelled"))
+            .Select(x => x.Title)
+            .Concat(organization.Workstreams
+                .Where(x => x.Status is not ("Completed" or "Cancelled"))
+                .Select(x => x.Outcome))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToList() ?? [];
+        if (outcomes.Count == 0 && profile?.Offerings.FirstOrDefault() is { } offering)
+            outcomes.Add($"Establish and validate {offering} for the first target customer.");
+
+        var mandate = profile is null
+            ? "Await the Chief of Staff's executive product mandate."
+            : !string.IsNullOrWhiteSpace(profile.Mission)
+                ? $"Own product outcomes that advance: {profile.Mission.Trim()}"
+                : !string.IsNullOrWhiteSpace(profile.Description)
+                    ? $"Own product strategy and outcomes for {profile.Description.Trim()}"
+                    : $"Own product strategy and outcomes for {profile.Name}.";
+        var constraints = new List<string>();
+        constraints.AddRange(profile?.Constraints ?? []);
+        if (context.FinancialProfile?.MaximumMonthlyWorkforceSpend is { } spend)
+            constraints.Add($"Maximum monthly workforce spend: {spend} {context.FinancialProfile.BaseCurrency}.");
+        constraints.AddRange(organization?.BudgetPosition?.Constraints ?? []);
+
+        var knownTeam = organization?.People
+            .Where(x => x.IsActive)
+            .Select(x => x.DisplayName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order()
+            .ToList() ?? [];
+        var revision = profile?.Revision ?? 0;
+        return new ProductRoleBriefResponse(
+            gaps.Count == 0 ? "Ready" : "AwaitingExecutiveInput",
+            chiefOrganizationUserId,
+            productManagerOrganizationUserId,
+            revision > int.MaxValue ? int.MaxValue : (int)revision,
+            mandate,
+            outcomes,
+            ["Customer evidence", "Outcome adoption", "Retention or repeat value", "Quality and learning velocity"],
+            constraints,
+            [
+                "Recommend product strategy, priorities, roadmap, requirements, and success measures.",
+                "Design the product-team structure and recommend product-specific hiring order.",
+                "Escalate company strategy, budget, hiring, and organization-wide commitments to the Chief of Staff."
+            ],
+            knownTeam,
+            gaps,
+            DateTimeOffset.UtcNow);
+    }
+
+    public static ProductPlanReviewResponse BuildProductPlanReview(
+        ProductPlanReviewRequest request,
+        ChiefOperatingContext context)
+    {
+        var feedback = new List<string>
+        {
+            "The Chief retains company-wide organization, candidate sourcing, hiring, spending, and approval authority."
+        };
+        if (context.FinancialProfile?.MaximumConcurrentHires is { } cap &&
+            request.Plan.TeamStructure.Count(x => x.Timing.Equals("Now", StringComparison.OrdinalIgnoreCase)) > cap)
+            feedback.Add($"Sequence immediate roles to respect the maximum concurrent-hire cap of {cap}.");
+        if (context.FinancialProfile?.MaximumMonthlyWorkforceSpend is null)
+            feedback.Add("Treat team cost as unresolved until the CEO sets a hard monthly workforce limit.");
+
+        var outstanding = request.Plan.ExecutiveDecisions
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+        return new ProductPlanReviewResponse(
+            outstanding.Count == 0 ? "Accepted" : "AwaitingExecutiveDecision",
+            request.Plan.Recommendation,
+            request.Plan.Alternatives.Take(2).ToList(),
+            feedback,
+            outstanding,
+            DateTimeOffset.UtcNow);
+    }
+
     public static string? NormalizeStage(string? stage) => stage?.Trim().ToLowerInvariant() switch
     {
         "idea" => "Idea",

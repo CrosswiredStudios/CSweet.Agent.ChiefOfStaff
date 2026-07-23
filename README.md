@@ -1,5 +1,7 @@
 # C-Sweet Chief of Staff
 
+See [`GRANTS.md`](GRANTS.md) for the complete capability catalog organized by service and feature.
+
 This first-party implementation uses exactly the same GitHub import, grant, isolated build,
 launch, broker authorization, and employee-binding path as third-party agents. Any valid agent
 may be assigned the Chief role; this implementation is a suggested catalog entry, not a privileged
@@ -16,10 +18,16 @@ searches capable current staff and installed digital workers first, reports disc
 marketplaces honestly, and treats installation, permission expansion, spending, human outreach,
 and engagement as separate approval gates.
 
+When an active Product Manager reports to the Chief, the agents coordinate through installation-
+targeted broker capabilities. The Chief supplies the initial product role brief, communicates
+executive information gaps to the owner, consults the Product Manager before product decisions,
+reviews product-team proposals, keeps ownership of the ranked hiring backlog, and pushes
+idempotent context updates after relevant owner and platform events.
+
 ## Requirements
 
 - .NET 10 SDK
-- `CSweet.Agent.SDK` 0.5.0 from NuGet.org
+- `CSweet.Agent.SDK` 0.6.0 from NuGet.org
 - A C-Sweet broker endpoint and approved agent installation
 
 ## Build
@@ -29,7 +37,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.5.0.nupkg` as an
+For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.6.0.nupkg` as an
 additional restore source rather than changing this repository's package reference.
 
 ## Import

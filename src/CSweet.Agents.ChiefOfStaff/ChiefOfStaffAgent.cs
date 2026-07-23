@@ -112,6 +112,16 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
+        if (message.EventType is "com.csweet.action.completed.v1" or
+            "com.csweet.action.rejected.v1" or
+            "com.csweet.approval.completed.v1" or
+            ManagementEvents.WorkstreamChanged or
+            ManagementEvents.WorkforcePlanDecided)
+        {
+            await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+            return;
+        }
+
         if (!string.Equals(message.EventType, ChiefOfStaffProfile.UserMessageReceivedEvent, StringComparison.Ordinal))
         {
             return;
@@ -297,6 +307,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             usage,
             failureMessage: null,
             cancellationToken);
+
+        await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
     }
 
     protected override async Task<AgentCapabilityExecutionResult> ExecuteCapabilityCoreAsync(
@@ -316,6 +328,70 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             if (checkIn is null) return AgentCapabilityExecutionResult.Failure("The management check-in input is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             return AgentCapabilityExecutionResult.Success(SerializePayload(ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext)));
+        }
+
+        if (request.Capability == ProductManagementCapabilities.RoleBrief)
+        {
+            var roleBriefRequest = DeserializePayload<ProductRoleBriefRequest>(request.Payload);
+            if (roleBriefRequest is null)
+                return AgentCapabilityExecutionResult.Failure("The Product Manager role-brief request is invalid.");
+            var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+            if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, roleBriefRequest, context, operatingContext))
+                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may request a role brief.");
+            if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
+                return AgentCapabilityExecutionResult.Failure("The Chief employee identity is unavailable.");
+            return AgentCapabilityExecutionResult.Success(SerializePayload(
+                ChiefOfStaffOrchestrator.BuildProductRoleBrief(
+                    operatingContext,
+                    chiefId,
+                    roleBriefRequest.ProductManagerOrganizationUserId)));
+        }
+
+        if (request.Capability == ProductManagementCapabilities.PlanReview)
+        {
+            var reviewRequest = DeserializePayload<ProductPlanReviewRequest>(request.Payload);
+            if (reviewRequest is null)
+                return AgentCapabilityExecutionResult.Failure("The Product Manager plan-review request is invalid.");
+            var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+            if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, reviewRequest, context, operatingContext))
+                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may submit a product plan.");
+            try
+            {
+                await ReconcileProductHiringBacklogAsync(reviewRequest, context, cancellationToken);
+            }
+            catch (PlatformCapabilityException exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Chief could not reconcile product plan {IdempotencyKey} with the hiring backlog.",
+                    reviewRequest.IdempotencyKey);
+                return AgentCapabilityExecutionResult.Failure(
+                    "The Chief could not reconcile the product plan with the hiring backlog.");
+            }
+
+            return AgentCapabilityExecutionResult.Success(SerializePayload(
+                ChiefOfStaffOrchestrator.BuildProductPlanReview(reviewRequest, operatingContext)));
+        }
+
+        if (request.Capability == ProductManagementCapabilities.Escalation)
+        {
+            var escalation = DeserializePayload<ProductEscalationRequest>(request.Payload);
+            if (escalation is null)
+                return AgentCapabilityExecutionResult.Failure("The Product Manager escalation is invalid.");
+            var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+            if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, escalation, context, operatingContext))
+                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may escalate a decision.");
+            try
+            {
+                var response = await EscalateProductDecisionToOwnerAsync(escalation, context, cancellationToken);
+                return AgentCapabilityExecutionResult.Success(SerializePayload(response));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Chief could not deliver Product Manager escalation {Topic}.", escalation.Topic);
+                return AgentCapabilityExecutionResult.Failure(
+                    "The Chief could not deliver the Product Manager's executive question.");
+            }
         }
 
         var input = DeserializePayload<AssistantCapabilityInput>(request.Payload);
@@ -616,6 +692,21 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             .GrantedRequestedCapabilities
             .ToHashSet(StringComparer.Ordinal)
             ?? new HashSet<string>(StringComparer.Ordinal);
+        var tools = PlatformToolAdapters.Create(
+            runtimeContext.Platform,
+            grantedPlatformCapabilities).ToList();
+        if (grantedPlatformCapabilities.Contains(ProductManagementCapabilities.Plan))
+        {
+            tools.Add(AIFunctionFactory.Create(
+                (string focus, CancellationToken token) => ConsultProductManagerAsync(
+                    focus,
+                    input,
+                    operatingContext,
+                    runtimeContext,
+                    token),
+                "consult_product_manager",
+                "Consult the active Product Manager direct report for product strategy, discovery, roadmap, requirements, priorities, or product-team design."));
+        }
 
         AIAgent agent = new ChatClientAgent(
             chatClient,
@@ -626,9 +717,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
                 ChatOptions = new ChatOptions
                 {
                     Instructions = ChiefOfStaffProfile.SystemPrompt,
-                    Tools = PlatformToolAdapters.Create(
-                        runtimeContext.Platform,
-                        grantedPlatformCapabilities).ToList()
+                    Tools = tools
                 },
                 AIContextProviders = [memoryProvider]
             });
@@ -705,11 +794,326 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             DateTimeOffset.UtcNow);
     }
 
+    internal static async Task<ProductPlanResponse> ConsultProductManagerAsync(
+        string focus,
+        AssistantCapabilityInput input,
+        ChiefOperatingContext operatingContext,
+        AgentRuntimeContext runtimeContext,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(runtimeContext.Identity?.EmployeeId, out var chiefId))
+            throw new InvalidOperationException("The Chief employee identity is unavailable.");
+        var organization = operatingContext.Organization
+            ?? throw new InvalidOperationException("The organization snapshot is unavailable.");
+        var productManager = organization.People
+            .Where(person =>
+            {
+                if (!person.IsActive ||
+                    person.ReportsToId != chiefId ||
+                    person.AgentInstallationId is null ||
+                    !person.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                var roleName = person.RoleId.HasValue
+                    ? organization.Roles.SingleOrDefault(x => x.Id == person.RoleId.Value)?.Name
+                    : null;
+                return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                       person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
+            })
+            .OrderBy(x => x.DisplayName)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("No active Product Manager reports to this Chief of Staff.");
+        var brief = ChiefOfStaffOrchestrator.BuildProductRoleBrief(
+            operatingContext,
+            chiefId,
+            productManager.Id);
+        var sourceId = input.MessageId != Guid.Empty ? input.MessageId : Guid.NewGuid();
+        var request = new ProductPlanRequest(
+            brief,
+            string.IsNullOrWhiteSpace(focus) ? "Provide a product recommendation for the current executive request." : focus.Trim(),
+            sourceId,
+            $"chief-product-consult:{productManager.Id:D}:{sourceId:D}");
+        var result = await runtimeContext.Broker.InvokeCapabilityAsync(
+            new RequestCapability
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Capability = ProductManagementCapabilities.Plan,
+                TargetAgentId = $"installation:{productManager.AgentInstallationId!.Value:D}",
+                ContentType = "application/json",
+                Payload = ByteString.CopyFrom(SerializePayload(request))
+            },
+            sourceId.ToString("N"),
+            cancellationToken);
+        if (!result.Succeeded)
+            throw new InvalidOperationException($"The Product Manager consultation failed: {result.Error}");
+        return DeserializePayload<ProductPlanResponse>(result.Payload)
+            ?? throw new InvalidOperationException("The Product Manager returned an invalid plan.");
+    }
+
     private static bool IsSupportedCapability(string capability) =>
         capability is ChiefOfStaffProfile.ConverseCapability or
             ChiefOfStaffProfile.SummarizeActivityCapability or
             ChiefOfStaffProfile.PlanWorkCapability or
-            ChiefOfStaffProfile.ManagementCheckInCapability;
+            ChiefOfStaffProfile.ManagementCheckInCapability or
+            ProductManagementCapabilities.RoleBrief or
+            ProductManagementCapabilities.PlanReview or
+            ProductManagementCapabilities.Escalation;
+
+    private static bool IsAuthorizedProductManagerRequest(
+        string requestingAgentId,
+        ProductRoleBriefRequest request,
+        AgentRuntimeContext runtimeContext,
+        ChiefOperatingContext operatingContext) =>
+        IsAuthorizedProductManagerRequest(
+            requestingAgentId,
+            request.ProductManagerOrganizationUserId,
+            request.ProductManagerInstallationId,
+            runtimeContext,
+            operatingContext);
+
+    private static bool IsAuthorizedProductManagerRequest(
+        string requestingAgentId,
+        ProductPlanReviewRequest request,
+        AgentRuntimeContext runtimeContext,
+        ChiefOperatingContext operatingContext) =>
+        IsAuthorizedProductManagerRequest(
+            requestingAgentId,
+            request.ProductManagerOrganizationUserId,
+            request.ProductManagerInstallationId,
+            runtimeContext,
+            operatingContext);
+
+    private static bool IsAuthorizedProductManagerRequest(
+        string requestingAgentId,
+        ProductEscalationRequest request,
+        AgentRuntimeContext runtimeContext,
+        ChiefOperatingContext operatingContext) =>
+        IsAuthorizedProductManagerRequest(
+            requestingAgentId,
+            request.ProductManagerOrganizationUserId,
+            request.ProductManagerInstallationId,
+            runtimeContext,
+            operatingContext);
+
+    private static bool IsAuthorizedProductManagerRequest(
+        string requestingAgentId,
+        Guid productManagerId,
+        Guid productManagerInstallationId,
+        AgentRuntimeContext runtimeContext,
+        ChiefOperatingContext operatingContext)
+    {
+        if (!string.Equals(requestingAgentId, "com.csweet.product-manager", StringComparison.Ordinal) ||
+            !Guid.TryParse(runtimeContext.Identity?.EmployeeId, out var chiefId))
+            return false;
+        var productManager = operatingContext.Organization?.People.SingleOrDefault(x =>
+            x.Id == productManagerId &&
+            x.IsActive &&
+            x.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase) &&
+            x.AgentInstallationId == productManagerInstallationId);
+        if (productManager?.ReportsToId != chiefId) return false;
+        var roleName = productManager.RoleId.HasValue
+            ? operatingContext.Organization?.Roles.SingleOrDefault(x => x.Id == productManager.RoleId.Value)?.Name
+            : null;
+        return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
+               productManager.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<ProductEscalationResponse> EscalateProductDecisionToOwnerAsync(
+        ProductEscalationRequest escalation,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
+            throw new InvalidOperationException("The Chief employee identity is unavailable.");
+        var read = await context.Broker.InvokeCapabilityAsync(
+            new RequestCapability
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Capability = ChiefOfStaffProfile.ReadCommunicationCapability,
+                ContentType = "application/json",
+                Payload = ByteString.CopyFromUtf8("{}")
+            },
+            escalation.SourceEventId.ToString("N"),
+            cancellationToken);
+        if (!read.Succeeded)
+            throw new InvalidOperationException($"The Chief could not read its conversations: {read.Error}");
+        var hub = DeserializePayload<CommunicationHubResponse>(read.Payload)
+            ?? throw new InvalidOperationException("The communication hub response is invalid.");
+        var ownerChat = hub.Chats
+            .Where(x => x.IsDirect &&
+                        x.Participants.Any(p => p.OrganizationUserId == chiefId) &&
+                        x.Participants.Any(p => p.EmployeeType.Equals("Human", StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(x => x.IsDeletionProtected)
+            .ThenByDescending(x => x.UpdatedAt)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("The Chief has no protected owner conversation.");
+
+        var content = new System.Text.StringBuilder();
+        content.Append("The Product Manager needs one executive answer: ").Append(escalation.Question);
+        if (!string.IsNullOrWhiteSpace(escalation.WhyItMatters))
+            content.Append("\n\nWhy it matters: ").Append(escalation.WhyItMatters);
+        if (escalation.Options.Count > 0)
+        {
+            content.Append("\n\nOptions: ").Append(string.Join("; ", escalation.Options.Take(2)));
+            if (!string.IsNullOrWhiteSpace(escalation.RecommendedOption))
+                content.Append("\n\nRecommended: ").Append(escalation.RecommendedOption);
+        }
+        var send = await context.Broker.InvokeCapabilityAsync(
+            new RequestCapability
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Capability = ChiefOfStaffProfile.SendCommunicationMessageCapability,
+                ContentType = "application/json",
+                Payload = ByteString.CopyFrom(SerializePayload(new SendCommunicationMessageRequest(
+                    ownerChat.Id,
+                    content.ToString(),
+                    escalation.IdempotencyKey)))
+            },
+            escalation.SourceEventId.ToString("N"),
+            cancellationToken);
+        if (!send.Succeeded)
+            throw new InvalidOperationException($"The Chief could not send the executive question: {send.Error}");
+        return new ProductEscalationResponse(
+            true,
+            "Delivered",
+            "The Chief sent the Product Manager's highest-value question to the CEO.",
+            DateTimeOffset.UtcNow);
+    }
+
+    private async Task PushProductManagerContextUpdatesAsync(
+        string sourceEventId,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId)) return;
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var organization = operatingContext.Organization;
+        if (organization is null) return;
+        var sourceId = Guid.TryParse(sourceEventId, out var parsed) ? parsed : Guid.NewGuid();
+        var productManagers = organization.People.Where(person =>
+        {
+            if (!person.IsActive ||
+                person.ReportsToId != chiefId ||
+                person.AgentInstallationId is null ||
+                !person.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var roleName = person.RoleId.HasValue
+                ? organization.Roles.SingleOrDefault(x => x.Id == person.RoleId.Value)?.Name
+                : null;
+            return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                   person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+
+        foreach (var productManager in productManagers)
+        {
+            var brief = ChiefOfStaffOrchestrator.BuildProductRoleBrief(
+                operatingContext,
+                chiefId,
+                productManager.Id);
+            var result = await context.Broker.InvokeCapabilityAsync(
+                new RequestCapability
+                {
+                    RequestId = Guid.NewGuid().ToString("N"),
+                    Capability = ProductManagementCapabilities.ContextUpdate,
+                    TargetAgentId = $"installation:{productManager.AgentInstallationId!.Value:D}",
+                    ContentType = "application/json",
+                    Payload = ByteString.CopyFrom(SerializePayload(new ProductContextUpdateRequest(
+                        brief,
+                        sourceId,
+                        $"product-context:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}")))
+                },
+                sourceEventId,
+                cancellationToken);
+            if (!result.Succeeded)
+            {
+                _logger.LogWarning(
+                    "Chief could not update Product Manager {ProductManagerId}: {Error}",
+                    productManager.Id,
+                    result.Error);
+                continue;
+            }
+
+            var update = DeserializePayload<ProductContextUpdateResponse>(result.Payload);
+            if (update?.PlanRefreshRequired != true) continue;
+            var planResult = await context.Broker.InvokeCapabilityAsync(
+                new RequestCapability
+                {
+                    RequestId = Guid.NewGuid().ToString("N"),
+                    Capability = ProductManagementCapabilities.Plan,
+                    TargetAgentId = $"installation:{productManager.AgentInstallationId.Value:D}",
+                    ContentType = "application/json",
+                    Payload = ByteString.CopyFrom(SerializePayload(new ProductPlanRequest(
+                        brief,
+                        "Refresh the product strategy, roadmap themes, product-team structure, and hiring sequence after this authoritative context change.",
+                        sourceId,
+                        $"product-refresh-plan:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}")))
+                },
+                sourceEventId,
+                cancellationToken);
+            if (!planResult.Succeeded)
+            {
+                _logger.LogWarning(
+                    "Chief could not refresh the plan from Product Manager {ProductManagerId}: {Error}",
+                    productManager.Id,
+                    planResult.Error);
+                continue;
+            }
+            var plan = DeserializePayload<ProductPlanResponse>(planResult.Payload);
+            if (plan is null)
+            {
+                _logger.LogWarning("Product Manager {ProductManagerId} returned an invalid refreshed plan.", productManager.Id);
+                continue;
+            }
+            try
+            {
+                await ReconcileProductHiringBacklogAsync(
+                    new ProductPlanReviewRequest(
+                        productManager.Id,
+                        productManager.AgentInstallationId.Value,
+                        plan,
+                        sourceId,
+                        $"product-refresh-review:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
+                    context,
+                    cancellationToken);
+            }
+            catch (PlatformCapabilityException exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Chief could not reconcile refreshed plan from Product Manager {ProductManagerId}.",
+                    productManager.Id);
+            }
+        }
+    }
+
+    private static async Task ReconcileProductHiringBacklogAsync(
+        ProductPlanReviewRequest reviewRequest,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        foreach (var role in reviewRequest.Plan.TeamStructure.OrderBy(x => x.Priority))
+        {
+            await context.Platform.UpsertHiringRecommendationAsync(
+                new UpsertHiringRecommendationRequest(
+                    role.Title,
+                    role.Purpose,
+                    null,
+                    [],
+                    null,
+                    $"{reviewRequest.IdempotencyKey}:role:{NormalizeKey(role.Title)}")
+                {
+                    Priority = Math.Max(1, role.Priority)
+                },
+                cancellationToken);
+        }
+    }
+
+    private static string NormalizeKey(string value)
+    {
+        var chars = value.Trim().ToLowerInvariant()
+            .Select(x => char.IsLetterOrDigit(x) ? x : '-')
+            .ToArray();
+        return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
 
     private async Task HandleManagementReviewAsync(DeliveredEvent message, AgentRuntimeContext context, CancellationToken cancellationToken)
     {

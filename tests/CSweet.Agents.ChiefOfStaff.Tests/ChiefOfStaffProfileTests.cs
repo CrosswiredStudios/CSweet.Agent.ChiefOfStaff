@@ -10,7 +10,7 @@ public sealed class ChiefOfStaffProfileTests
     public void Profile_UsesThirdPartyIdentityAndCompatibleConversationContract()
     {
         Assert.Equal("com.csweet.chief-of-staff", ChiefOfStaffProfile.AgentId);
-        Assert.Equal("assistant.converse.v1", ChiefOfStaffProfile.ConverseCapability);
+        Assert.Equal(AssistantCapabilities.Converse, ChiefOfStaffProfile.ConverseCapability);
         Assert.Equal("com.csweet.user.message.received.v1", ChiefOfStaffProfile.UserMessageReceivedEvent);
         Assert.Equal("com.csweet.assistant.response.chunk.v1", ChiefOfStaffProfile.AssistantResponseChunkEvent);
     }
@@ -57,6 +57,8 @@ public sealed class ChiefOfStaffProfileTests
         var requires = manifest.RootElement.GetProperty("requires").EnumerateArray()
             .Select(x => x.GetProperty("name").GetString()).ToList();
 
+        Assert.All(provides.Concat(requires), capability =>
+            Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
         Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
         Assert.Contains(AgentConfigurationCapabilities.Update, provides);
@@ -69,6 +71,12 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
         Assert.Contains(PlatformCapabilities.HiringWorkflowStage, requires);
+        Assert.Contains(ProductManagementCapabilities.RoleBrief, provides);
+        Assert.Contains(ProductManagementCapabilities.PlanReview, provides);
+        Assert.Contains(ProductManagementCapabilities.Escalation, provides);
+        Assert.Contains(ProductManagementCapabilities.Plan, requires);
+        Assert.Contains(ProductManagementCapabilities.ContextUpdate, requires);
+        Assert.Contains(ChiefOfStaffProfile.ReadCommunicationCapability, requires);
         Assert.Contains("at most one high-value question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -77,6 +85,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("only the highest-priority unfilled role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never print, describe, or imitate a tool call", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ask one concise plain-text question instead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Consult an active Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

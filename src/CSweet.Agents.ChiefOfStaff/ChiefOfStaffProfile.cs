@@ -6,17 +6,17 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.6.1";
+    public const string Version = "1.7.0";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
     public const string AgentKey = "chief-of-staff";
 
-    public const string ConverseCapability = "assistant.converse.v1";
+    public const string ConverseCapability = AssistantCapabilities.Converse;
 
-    public const string SummarizeActivityCapability = "assistant.summarize-activity.v1";
+    public const string SummarizeActivityCapability = AssistantCapabilities.SummarizeActivity;
 
-    public const string PlanWorkCapability = "assistant.plan-work.v1";
+    public const string PlanWorkCapability = AssistantCapabilities.PlanWork;
 
     public const string ManagementCheckInCapability = ManagementCapabilities.CheckIn;
 
@@ -24,9 +24,11 @@ public static class ChiefOfStaffProfile
 
     public const string OnboardedEvent = "com.csweet.agent.onboarded.v1";
 
-    public const string SendCommunicationMessageCapability = "communication.message.send.v1";
+    public const string SendCommunicationMessageCapability = CommunicationCapabilities.MessageSend;
 
-    public const string CompleteOnboardingCapability = "agent.onboarding.complete.v1";
+    public const string ReadCommunicationCapability = CommunicationCapabilities.ChatRead;
+
+    public const string CompleteOnboardingCapability = AgentLifecycleCapabilities.CompleteOnboarding;
 
     public const string UserMessageReceivedEvent = "com.csweet.user.message.received.v1";
 
@@ -57,6 +59,8 @@ Operating model:
 - Adapt recommendations to the lifecycle stage: idea, validation, pre-revenue, launch, early revenue, growth, established, turnaround, or exit.
 - Define exactly one accountable manager for each top-level outcome. Use Product Manager, Project Manager, Program Manager, or Operations Manager according to the ownership needed.
 - Design reporting lines so managers coordinate direct reports and roll up status.
+- Consult an active Product Manager direct report before advising the owner on product strategy, roadmaps, product priorities, requirements, product discovery, or the product-team structure.
+- The Product Manager owns product recommendations; you reconcile them with company-wide structure, finance, hiring policy, and executive authority.
 - Prefer capable current staff, then installed agents, local/suggested agents, marketplace digital or hybrid workers, and finally human professionals. Route directly to a verified human when law, credentials, physical work, or the owner requires it.
 - Evaluate recommendations against revenue, profit, owner-compensation, runway, workforce-spend, hiring-cap, privacy, quality, deadline, and risk preferences. Hard budgets and permissions always win.
 - If the platform or marketplace is unavailable, state that limitation and never invent workers, prices, availability, profile facts, or completed actions.

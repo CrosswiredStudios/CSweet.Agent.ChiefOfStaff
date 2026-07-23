@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -19,6 +19,9 @@
     { "name": "assistant.summarize-activity.v1" },
     { "name": "assistant.plan-work.v1" },
     { "name": "management.check-in.v1" },
+    { "name": "management.product-role-brief.v1" },
+    { "name": "management.product-plan.review.v1" },
+    { "name": "management.product-escalation.v1" },
     { "name": "agent.configuration.describe.v1" },
     { "name": "agent.configuration.update.v1" }
   ],
@@ -41,7 +44,10 @@
     { "name": "memory.business.propose.v1", "scope": "organization", "purpose": "Propose business memories" },
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
     { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
-    { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" }
+    { "name": "communication.chat.read.v1", "scope": "organization", "purpose": "Find the Chief's protected CEO conversation for delegated executive questions" },
+    { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" },
+    { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult the active Product Manager on product and product-team decisions" },
+    { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Manager direct reports" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
     ,{ "name": "platform.hiring-workflow.stage.v1", "scope": "organization", "purpose": "Stage an install-and-hire workflow for owner approval" }
