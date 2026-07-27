@@ -47,12 +47,16 @@
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
     { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
     { "name": "communication.chat.read.v1", "scope": "organization", "purpose": "Find the Chief's protected CEO conversation for delegated executive questions" },
+    { "name": "communication.chat.create.v1", "scope": "organization", "purpose": "Open or reuse a direct conversation with the Chief's current manager" },
     { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" },
     { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult the active Product Manager on product and product-team decisions" },
     { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Manager direct reports" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
     ,{ "name": "platform.hiring-recommendation.resolve.v1", "scope": "organization", "purpose": "Resolve this Chief of Staff installation's role suggestions after a matching hire" }
+    ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision" }
+    ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
+    ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
     ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" }
   ],
   "events": {
@@ -65,6 +69,8 @@
       "com.csweet.management.review.due.v1",
       "com.csweet.management.status.reported.v1",
       "com.csweet.management.resource-need.reported.v1",
+      "com.csweet.management.resource-change.requested.v1",
+      "com.csweet.management.resource-change.decided.v1",
       "com.csweet.workstream.changed.v1",
       "com.csweet.workforce-plan.decided.v1",
       "com.csweet.employee.hired.v1"

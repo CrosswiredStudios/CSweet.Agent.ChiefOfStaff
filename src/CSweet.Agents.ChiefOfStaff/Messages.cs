@@ -14,6 +14,21 @@ public sealed record SendCommunicationMessageRequest(
     string Content,
     string IdempotencyKey);
 
+internal sealed record CreateCommunicationChatRequest(
+    string? Title,
+    string? Description,
+    bool IsDirect,
+    bool IsPrivate,
+    IReadOnlyList<Guid> ParticipantOrganizationUserIds,
+    IReadOnlyList<Guid>? AudienceRoleIds = null,
+    IReadOnlyList<Guid>? AudienceWorkstreamIds = null);
+
+internal sealed record CommunicationHubActionResponse(
+    bool Succeeded,
+    string? ErrorCode,
+    string Message,
+    CommunicationChatResponse? Chat = null);
+
 public sealed record EmployeeHiredEvent(
     Guid OrganizationId,
     Guid OrganizationUserId,

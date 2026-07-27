@@ -67,6 +67,9 @@ policy at runtime.
 | `platform.hiring-recommendation.list.v1` | organization | Read this Chief installation's ranked role backlog. |
 | `platform.hiring-recommendation.upsert.v1` | organization | Maintain ranked hiring recommendations. |
 | `platform.hiring-recommendation.resolve.v1` | organization | Resolve a matching role suggestion after a hire event. |
+| `platform.hiring-recommendation.withdraw.v1` | organization | Withdraw a suggestion removed by a later approved team snapshot. |
+| `platform.management.resource-change.read.v1` | organization | Read authoritative resource-change requests and approved snapshots. |
+| `platform.management.resource-change.decide.v1` | organization | Decide a request only when this Chief is the requester's current manager. |
 | `platform.user-action.suggest.v1` | organization | Attach a platform-resolved Marketplace action to a Chief message. |
 
 These grants are Chief-owned. Product Manager installations deliberately do not receive them.
@@ -85,6 +88,7 @@ These grants are Chief-owned. Product Manager installations deliberately do not 
 | Grant | Scope | Feature |
 |---|---|---|
 | `communication.chat.read.v1` | organization | Locate the Chief's protected CEO conversation for delegated executive questions. |
+| `communication.chat.create.v1` | organization | Open or reuse the direct chat with the Chief's current manager. |
 | `communication.message.send.v1` | organization | Send messages to conversations in which the Chief is a participant. |
 
 ### Product Manager collaboration

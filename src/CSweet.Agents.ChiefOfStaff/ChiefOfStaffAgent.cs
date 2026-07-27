@@ -111,6 +111,18 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
+        if (string.Equals(message.EventType, ManagementEvents.ResourceChangeRequested, StringComparison.Ordinal))
+        {
+            await HandleResourceChangeRequestedAsync(message, context, cancellationToken);
+            return;
+        }
+
+        if (string.Equals(message.EventType, ManagementEvents.ResourceChangeDecided, StringComparison.Ordinal))
+        {
+            await HandleResourceChangeDecidedAsync(message, context, cancellationToken);
+            return;
+        }
+
         if (string.Equals(message.EventType, ManagementEvents.ReviewDue, StringComparison.Ordinal))
         {
             await HandleManagementReviewAsync(message, context, cancellationToken);
@@ -364,20 +376,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, reviewRequest, context, operatingContext))
                 return AgentWorkResult.Failure("Only an active Product Manager direct report may submit a product plan.");
-            try
-            {
-                await ReconcileProductHiringBacklogAsync(reviewRequest, context, cancellationToken);
-            }
-            catch (PlatformCapabilityException exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Chief could not reconcile product plan {IdempotencyKey} with the hiring backlog.",
-                    reviewRequest.IdempotencyKey);
-                return AgentWorkResult.Failure(
-                    "The Chief could not reconcile the product plan with the hiring backlog.");
-            }
-
             return new AgentWorkResult(true, SerializePayload(
                 ChiefOfStaffOrchestrator.BuildProductPlanReview(reviewRequest, operatingContext)));
         }
@@ -466,6 +464,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             $"agent-onboarded:{message.EventId}",
             context,
             cancellationToken);
+        await ReconcileApprovedResourceChangesAsync(context, cancellationToken);
 
         _ = await context.Platform.InvokeAsync<CompleteAgentOnboardingRequest, JsonElement>(
             ChiefOfStaffProfile.CompleteOnboardingCapability,
@@ -476,6 +475,198 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
             message.EventId,
             onboarding.ConversationId);
+    }
+
+    private async Task HandleResourceChangeRequestedAsync(
+        AgentEventEnvelope message,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var resourceEvent = DeserializePayload<ResourceChangeDecisionEvent>(message.Payload);
+        if (resourceEvent is null) return;
+        var read = await context.Platform.ReadResourceChangesAsync(
+            new ResourceChangeReadRequest(resourceEvent.RequestId),
+            cancellationToken);
+        var request = read.Requests.SingleOrDefault(x => x.Id == resourceEvent.RequestId);
+        if (request is null) return;
+
+        var (_, self, organization) = await RequireActiveChiefAsync(context, cancellationToken);
+        var requester = organization.People.SingleOrDefault(x =>
+            x.Id == request.RequesterOrganizationUserId &&
+            x.IsActive &&
+            x.ReportsToId == self.Id);
+        if (request.ManagerOrganizationUserId != self.Id || requester is null)
+            return;
+
+        var missingPurpose = request.Roles.FirstOrDefault(x =>
+            string.IsNullOrWhiteSpace(x.Purpose) || x.RequiredCapabilities.Count == 0);
+        var decision = missingPurpose is null
+            ? ResourceChangeDecisionKinds.Approve
+            : ResourceChangeDecisionKinds.RequestRevision;
+        var comment = missingPurpose is null
+            ? "Approved as an organizational role-set decision. Spending, candidate selection, and each hire remain separately controlled."
+            : $"Clarify the purpose and required capabilities for {missingPurpose.Title}.";
+        _ = await context.Platform.DecideResourceChangeAsync(
+            new ResourceChangeDecisionRequest(
+                request.Id,
+                decision,
+                comment,
+                $"chief-resource-change:{request.Id:N}:{decision}"),
+            cancellationToken);
+    }
+
+    private async Task HandleResourceChangeDecidedAsync(
+        AgentEventEnvelope message,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var resourceEvent = DeserializePayload<ResourceChangeDecisionEvent>(message.Payload);
+        if (resourceEvent is null ||
+            !string.Equals(resourceEvent.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+            return;
+        var read = await context.Platform.ReadResourceChangesAsync(
+            new ResourceChangeReadRequest(resourceEvent.RequestId),
+            cancellationToken);
+        var request = read.Requests.SingleOrDefault(x =>
+            x.Id == resourceEvent.RequestId &&
+            x.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase));
+        if (request is not null)
+            await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
+    }
+
+    private async Task ReconcileApprovedResourceChangesAsync(
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        await RequireActiveChiefAsync(context, cancellationToken);
+        var read = await context.Platform.ReadResourceChangesAsync(
+            new ResourceChangeReadRequest(Statuses: ["Approved"]),
+            cancellationToken);
+        foreach (var request in read.Requests.OrderBy(x => x.DecidedAt))
+            await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
+    }
+
+    private async Task ReconcileApprovedResourceChangeAsync(
+        ResourceChangeRequestResponse request,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        await RequireActiveChiefAsync(context, cancellationToken);
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        var managerChat = await FindManagerChatAsync(context, cancellationToken);
+        foreach (var delta in request.Deltas.OrderBy(x => x.Role.Priority))
+        {
+            var stableRoleKey = $"{request.RequesterOrganizationUserId:N}:{delta.Role.RoleKey}";
+            if (delta.ChangeKind.Equals("Remove", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var existing in backlog.Recommendations.Where(x =>
+                             string.Equals(x.RoleKey, stableRoleKey, StringComparison.Ordinal)))
+                {
+                    _ = await context.Platform.WithdrawHiringRecommendationAsync(
+                        new WithdrawHiringRecommendationRequest(
+                            existing.Id,
+                            $"Removed by approved resource-change request {request.Id:D}.",
+                            $"resource-change:{request.Id:N}:withdraw:{NormalizeKey(delta.Role.RoleKey)}"),
+                        cancellationToken);
+                }
+                continue;
+            }
+
+            var recommendation = await context.Platform.UpsertHiringRecommendationAsync(
+                new UpsertHiringRecommendationRequest(
+                    delta.Role.Title,
+                    delta.Role.Purpose,
+                    null,
+                    [],
+                    null,
+                    $"resource-role:{request.RequesterOrganizationUserId:N}:{NormalizeKey(delta.Role.RoleKey)}")
+                {
+                    Priority = Math.Max(1, delta.Role.Priority),
+                    RoleKey = stableRoleKey,
+                    Headcount = delta.Role.Headcount,
+                    SourceResourceChangeRequestId = request.Id
+                },
+                cancellationToken);
+
+            if (delta.ChangeKind is not ("Add" or "Increase")) continue;
+            var content =
+                $"Approved hiring suggestion: **{delta.Role.Title}**\n\n" +
+                $"Objective: {delta.Role.Purpose}\n\n" +
+                $"Priority {delta.Role.Priority} · headcount {delta.Role.Headcount} · timing {delta.Role.Timing}. " +
+                "This creates a candidate-free suggestion only; Marketplace review, spending, installation, and the hire remain separately approved.";
+            var messageId = await SendCommunicationMessageAsync(
+                managerChat.Id,
+                content,
+                $"resource-change:{request.Id:N}:role:{NormalizeKey(delta.Role.RoleKey)}",
+                context,
+                cancellationToken);
+            await SuggestMarketplaceActionAsync(
+                messageId,
+                delta.Role.Title,
+                $"resource-change:{request.Id:N}:action:{recommendation.Id:N}",
+                context,
+                cancellationToken);
+        }
+    }
+
+    private async Task<(Guid InstallationId, OrganizationPerson Self, OrganizationSnapshotResponse Organization)>
+        RequireActiveChiefAsync(
+            AgentRuntimeContext context,
+            CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.InstallationId, out var installationId) ||
+            !Guid.TryParse(context.Identity?.EmployeeId, out var employeeId))
+            throw new InvalidOperationException("The Chief of Staff identity is unavailable.");
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var organization = operatingContext.Organization
+            ?? throw new InvalidOperationException("The organization snapshot is unavailable.");
+        var self = organization.People.SingleOrDefault(x =>
+            x.Id == employeeId &&
+            x.AgentInstallationId == installationId &&
+            x.IsActive)
+            ?? throw new InvalidOperationException("This installation is not the active Chief of Staff.");
+        var roleName = self.RoleId.HasValue
+            ? organization.Roles.SingleOrDefault(x => x.Id == self.RoleId.Value)?.Name
+            : null;
+        if (!self.DisplayName.Contains("Chief of Staff", StringComparison.OrdinalIgnoreCase) &&
+            !(roleName?.Contains("Chief of Staff", StringComparison.OrdinalIgnoreCase) ?? false))
+            throw new InvalidOperationException("This installation is not assigned the Chief of Staff role.");
+        return (installationId, self, organization);
+    }
+
+    private async Task<CommunicationChatResponse> FindManagerChatAsync(
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var (_, self, organization) = await RequireActiveChiefAsync(context, cancellationToken);
+        var manager = self.ReportsToId.HasValue
+            ? organization.People.SingleOrDefault(x => x.Id == self.ReportsToId.Value && x.IsActive)
+            : null;
+        if (manager is null)
+            throw new InvalidOperationException("The Chief of Staff has no active manager.");
+        var hub = await context.Platform.InvokeAsync<JsonElement, CommunicationHubResponse>(
+            ChiefOfStaffProfile.ReadCommunicationCapability,
+            JsonSerializer.Deserialize<JsonElement>("{}"),
+            cancellationToken);
+        var existing = hub.Chats
+            .Where(x => x.IsDirect &&
+                        x.Participants.Any(p => p.OrganizationUserId == self.Id) &&
+                        x.Participants.Any(p => p.OrganizationUserId == manager.Id))
+            .OrderByDescending(x => x.UpdatedAt)
+            .FirstOrDefault();
+        if (existing is not null) return existing;
+        var created = await context.Platform.InvokeAsync<CreateCommunicationChatRequest, CommunicationHubActionResponse>(
+            ChiefOfStaffProfile.CreateCommunicationCapability,
+            new CreateCommunicationChatRequest(
+                null,
+                "Private Chief of Staff manager conversation.",
+                true,
+                true,
+                [manager.Id]),
+            cancellationToken);
+        return created.Succeeded && created.Chat is not null
+            ? created.Chat
+            : throw new InvalidOperationException($"The Chief could not open its manager chat: {created.Message}");
     }
 
     private async Task HandleEmployeeHiredAsync(
@@ -1166,47 +1357,6 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
                     "Refresh the product strategy, roadmap themes, product-team structure, and hiring sequence after this authoritative context change.",
                     sourceId,
                     $"product-refresh-plan:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
-                cancellationToken);
-            try
-            {
-                await ReconcileProductHiringBacklogAsync(
-                    new ProductPlanReviewRequest(
-                        productManager.Id,
-                        agentInstallationId,
-                        plan,
-                        sourceId,
-                        $"product-refresh-review:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
-                    context,
-                    cancellationToken);
-            }
-            catch (PlatformCapabilityException exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Chief could not reconcile refreshed plan from Product Manager {ProductManagerId}.",
-                    productManager.Id);
-            }
-        }
-    }
-
-    private static async Task ReconcileProductHiringBacklogAsync(
-        ProductPlanReviewRequest reviewRequest,
-        AgentRuntimeContext context,
-        CancellationToken cancellationToken)
-    {
-        foreach (var role in reviewRequest.Plan.TeamStructure.OrderBy(x => x.Priority))
-        {
-            await context.Platform.UpsertHiringRecommendationAsync(
-                new UpsertHiringRecommendationRequest(
-                    role.Title,
-                    role.Purpose,
-                    null,
-                    [],
-                    null,
-                    $"{reviewRequest.IdempotencyKey}:role:{NormalizeKey(role.Title)}")
-                {
-                    Priority = Math.Max(1, role.Priority)
-                },
                 cancellationToken);
         }
     }
