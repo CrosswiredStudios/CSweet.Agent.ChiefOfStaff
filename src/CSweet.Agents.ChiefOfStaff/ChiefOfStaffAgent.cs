@@ -1,8 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Net.Http;
-using CSweet.Agent.Contracts.Grpc;
+using System.Text.Json;
 using CSweet.Agent.SDK;
-using Google.Protobuf;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -96,7 +95,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     }
 
     public override async Task HandleEventAsync(
-        DeliveredEvent message,
+        AgentEventEnvelope message,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
@@ -127,7 +126,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
-        var incoming = DeserializePayload<UserMessageReceived>(message.Payload);
+        var incoming = DeserializePayload<UserMessageReceived>(message.Data);
 
         if (incoming is null ||
             incoming.ProviderProfileId == Guid.Empty ||
@@ -284,19 +283,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             sequence,
             builder.Length);
 
-        await context.Broker.PublishEventAsync(
-            new PublishEvent
-            {
-                EventType = ChiefOfStaffProfile.AssistantResponseCreatedEvent,
-                SchemaVersion = "1",
-                Subject = $"conversation/{conversationId}",
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(
-                    new AssistantResponseCreated(conversationId, builder.ToString(), ProposedActions: [], DateTimeOffset.UtcNow)))
-            },
-            message.EventId,
-            cancellationToken);
-
         await WriteRunLogAsync(
             incoming.ProviderProfileId,
             incoming.Message,
@@ -311,36 +297,36 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
     }
 
-    protected override async Task<AgentCapabilityExecutionResult> ExecuteCapabilityCoreAsync(
-        CapabilityRequest request,
+    protected override async Task<AgentWorkResult> ExecuteCapabilityCoreAsync(
+        AgentCapabilityRequest request,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
         if (!IsSupportedCapability(request.Capability))
         {
-            return AgentCapabilityExecutionResult.Failure(
+            return AgentWorkResult.Failure(
                 $"Capability '{request.Capability}' is not supported by the Chief of Staff.");
         }
 
         if (request.Capability == ChiefOfStaffProfile.ManagementCheckInCapability)
         {
             var checkIn = DeserializePayload<ManagementCheckInRequest>(request.Payload);
-            if (checkIn is null) return AgentCapabilityExecutionResult.Failure("The management check-in input is invalid.");
+            if (checkIn is null) return AgentWorkResult.Failure("The management check-in input is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
-            return AgentCapabilityExecutionResult.Success(SerializePayload(ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext)));
+            return new AgentWorkResult(true, SerializePayload(ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext)));
         }
 
         if (request.Capability == ProductManagementCapabilities.RoleBrief)
         {
             var roleBriefRequest = DeserializePayload<ProductRoleBriefRequest>(request.Payload);
             if (roleBriefRequest is null)
-                return AgentCapabilityExecutionResult.Failure("The Product Manager role-brief request is invalid.");
+                return AgentWorkResult.Failure("The Product Manager role-brief request is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, roleBriefRequest, context, operatingContext))
-                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may request a role brief.");
+                return AgentWorkResult.Failure("Only an active Product Manager direct report may request a role brief.");
             if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
-                return AgentCapabilityExecutionResult.Failure("The Chief employee identity is unavailable.");
-            return AgentCapabilityExecutionResult.Success(SerializePayload(
+                return AgentWorkResult.Failure("The Chief employee identity is unavailable.");
+            return new AgentWorkResult(true, SerializePayload(
                 ChiefOfStaffOrchestrator.BuildProductRoleBrief(
                     operatingContext,
                     chiefId,
@@ -351,10 +337,10 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         {
             var reviewRequest = DeserializePayload<ProductPlanReviewRequest>(request.Payload);
             if (reviewRequest is null)
-                return AgentCapabilityExecutionResult.Failure("The Product Manager plan-review request is invalid.");
+                return AgentWorkResult.Failure("The Product Manager plan-review request is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, reviewRequest, context, operatingContext))
-                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may submit a product plan.");
+                return AgentWorkResult.Failure("Only an active Product Manager direct report may submit a product plan.");
             try
             {
                 await ReconcileProductHiringBacklogAsync(reviewRequest, context, cancellationToken);
@@ -365,11 +351,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     exception,
                     "Chief could not reconcile product plan {IdempotencyKey} with the hiring backlog.",
                     reviewRequest.IdempotencyKey);
-                return AgentCapabilityExecutionResult.Failure(
+                return AgentWorkResult.Failure(
                     "The Chief could not reconcile the product plan with the hiring backlog.");
             }
 
-            return AgentCapabilityExecutionResult.Success(SerializePayload(
+            return new AgentWorkResult(true, SerializePayload(
                 ChiefOfStaffOrchestrator.BuildProductPlanReview(reviewRequest, operatingContext)));
         }
 
@@ -377,19 +363,19 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         {
             var escalation = DeserializePayload<ProductEscalationRequest>(request.Payload);
             if (escalation is null)
-                return AgentCapabilityExecutionResult.Failure("The Product Manager escalation is invalid.");
+                return AgentWorkResult.Failure("The Product Manager escalation is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, escalation, context, operatingContext))
-                return AgentCapabilityExecutionResult.Failure("Only an active Product Manager direct report may escalate a decision.");
+                return AgentWorkResult.Failure("Only an active Product Manager direct report may escalate a decision.");
             try
             {
                 var response = await EscalateProductDecisionToOwnerAsync(escalation, context, cancellationToken);
-                return AgentCapabilityExecutionResult.Success(SerializePayload(response));
+                return new AgentWorkResult(true, SerializePayload(response));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 _logger.LogWarning(exception, "Chief could not deliver Product Manager escalation {Topic}.", escalation.Topic);
-                return AgentCapabilityExecutionResult.Failure(
+                return AgentWorkResult.Failure(
                     "The Chief could not deliver the Product Manager's executive question.");
             }
         }
@@ -400,7 +386,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             input.ProviderProfileId == Guid.Empty ||
             string.IsNullOrWhiteSpace(input.Prompt))
         {
-            return AgentCapabilityExecutionResult.Failure(
+            return AgentWorkResult.Failure(
                 "The capability input is missing a provider profile or prompt.");
         }
 
@@ -412,7 +398,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 context,
                 cancellationToken);
 
-            return AgentCapabilityExecutionResult.Success(SerializePayload(response));
+            return new AgentWorkResult(true, SerializePayload(response));
         }
         catch (Exception exception)
         {
@@ -421,13 +407,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 "Chief of Staff failed capability {Capability}.",
                 request.Capability);
 
-            return AgentCapabilityExecutionResult.Failure(
+            return AgentWorkResult.Failure(
                 "The Chief of Staff could not complete the request.");
         }
     }
 
     private async Task HandleOnboardedAsync(
-        DeliveredEvent message,
+        AgentEventEnvelope message,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
@@ -446,34 +432,18 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             eventId,
             context,
             cancellationToken);
-        var sendResult = await context.Broker.InvokeCapabilityAsync(
-            new RequestCapability
-            {
-                RequestId = Guid.NewGuid().ToString("N"),
-                Capability = ChiefOfStaffProfile.SendCommunicationMessageCapability,
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(new SendCommunicationMessageRequest(
-                    onboarding.ConversationId,
-                    openingMessage,
-                    $"agent-onboarded:{message.EventId}")))
-            },
-            message.EventId,
+        _ = await context.Platform.InvokeAsync<SendCommunicationMessageRequest, JsonElement>(
+            ChiefOfStaffProfile.SendCommunicationMessageCapability,
+            new SendCommunicationMessageRequest(
+                onboarding.ConversationId,
+                openingMessage,
+                $"agent-onboarded:{message.EventId}"),
             cancellationToken);
-        if (!sendResult.Succeeded)
-            throw new InvalidOperationException($"The Chief of Staff could not send its onboarding message: {sendResult.Error}");
 
-        var acknowledgement = await context.Broker.InvokeCapabilityAsync(
-            new RequestCapability
-            {
-                RequestId = Guid.NewGuid().ToString("N"),
-                Capability = ChiefOfStaffProfile.CompleteOnboardingCapability,
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(new CompleteAgentOnboardingRequest(eventId)))
-            },
-            message.EventId,
+        _ = await context.Platform.InvokeAsync<CompleteAgentOnboardingRequest, JsonElement>(
+            ChiefOfStaffProfile.CompleteOnboardingCapability,
+            new CompleteAgentOnboardingRequest(eventId),
             cancellationToken);
-        if (!acknowledgement.Succeeded)
-            throw new InvalidOperationException($"The Chief of Staff could not acknowledge onboarding: {acknowledgement.Error}");
 
         _logger.LogInformation(
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
@@ -582,17 +552,8 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         AssistantResponseChunk chunk,
         CancellationToken cancellationToken)
     {
-        return context.Broker.PublishEventAsync(
-            new PublishEvent
-            {
-                EventType = ChiefOfStaffProfile.AssistantResponseChunkEvent,
-                SchemaVersion = "1",
-                Subject = $"conversation/{chunk.ConversationId}",
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(chunk))
-            },
-            correlationId,
-            cancellationToken);
+        _ = correlationId;
+        return context.ReportProgressAsync(chunk, cancellationToken);
     }
 
     private static Task PublishAgentErrorAsync(
@@ -659,7 +620,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             input.ProviderProfileId,
             Settings.GetString("llmModel"));
         var chatClient = _llmClientFactory is null
-            ? new BrokerLlmClient(runtimeContext.Broker, selection)
+            ? new PlatformChatClient(runtimeContext.Platform, selection)
             : await _llmClientFactory.CreateChatClientAsync(selection, cancellationToken);
 
         operatingContext ??= await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
@@ -677,7 +638,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             StoreAssistantMessages = true,
             FailOpen = true
         });
-        var memoryStore = new CSweetBrokerMemoryStore(runtimeContext.Broker);
+        var memoryStore = new CSweetPlatformMemoryStore(runtimeContext.Platform);
         var memoryEngine = new MemoryEngine(
             memoryStore,
             memoryOptions,
@@ -688,14 +649,9 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             new SessionStateMemoryPartitionResolver(memoryOptions),
             memoryOptions);
 
-        var grantedPlatformCapabilities = runtimeContext.Broker.Registration?
-            .GrantedRequestedCapabilities
-            .ToHashSet(StringComparer.Ordinal)
-            ?? new HashSet<string>(StringComparer.Ordinal);
-        var tools = PlatformToolAdapters.Create(
-            runtimeContext.Platform,
-            grantedPlatformCapabilities).ToList();
-        if (grantedPlatformCapabilities.Contains(ProductManagementCapabilities.Plan))
+        var tools = (await runtimeContext.GetModelToolsAsync(cancellationToken)).ToList();
+        if (tools.Any(tool => tool is AIFunctionDeclaration function &&
+                            function.Name == "product_management_plan"))
         {
             tools.Add(AIFunctionFactory.Create(
                 (string focus, CancellationToken token) => ConsultProductManagerAsync(
@@ -832,21 +788,12 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             string.IsNullOrWhiteSpace(focus) ? "Provide a product recommendation for the current executive request." : focus.Trim(),
             sourceId,
             $"chief-product-consult:{productManager.Id:D}:{sourceId:D}");
-        var result = await runtimeContext.Broker.InvokeCapabilityAsync(
-            new RequestCapability
-            {
-                RequestId = Guid.NewGuid().ToString("N"),
-                Capability = ProductManagementCapabilities.Plan,
-                TargetAgentId = $"installation:{productManager.AgentInstallationId!.Value:D}",
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(request))
-            },
-            sourceId.ToString("N"),
+        _ = productManager.AgentInstallationId;
+        _ = sourceId;
+        return await runtimeContext.Platform.InvokeAsync<ProductPlanRequest, ProductPlanResponse>(
+            ProductManagementCapabilities.Plan,
+            request,
             cancellationToken);
-        if (!result.Succeeded)
-            throw new InvalidOperationException($"The Product Manager consultation failed: {result.Error}");
-        return DeserializePayload<ProductPlanResponse>(result.Payload)
-            ?? throw new InvalidOperationException("The Product Manager returned an invalid plan.");
     }
 
     private static bool IsSupportedCapability(string capability) =>
@@ -924,20 +871,10 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
     {
         if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
             throw new InvalidOperationException("The Chief employee identity is unavailable.");
-        var read = await context.Broker.InvokeCapabilityAsync(
-            new RequestCapability
-            {
-                RequestId = Guid.NewGuid().ToString("N"),
-                Capability = ChiefOfStaffProfile.ReadCommunicationCapability,
-                ContentType = "application/json",
-                Payload = ByteString.CopyFromUtf8("{}")
-            },
-            escalation.SourceEventId.ToString("N"),
+        var hub = await context.Platform.InvokeAsync<JsonElement, CommunicationHubResponse>(
+            ChiefOfStaffProfile.ReadCommunicationCapability,
+            JsonSerializer.Deserialize<JsonElement>("{}"),
             cancellationToken);
-        if (!read.Succeeded)
-            throw new InvalidOperationException($"The Chief could not read its conversations: {read.Error}");
-        var hub = DeserializePayload<CommunicationHubResponse>(read.Payload)
-            ?? throw new InvalidOperationException("The communication hub response is invalid.");
         var ownerChat = hub.Chats
             .Where(x => x.IsDirect &&
                         x.Participants.Any(p => p.OrganizationUserId == chiefId) &&
@@ -957,21 +894,13 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             if (!string.IsNullOrWhiteSpace(escalation.RecommendedOption))
                 content.Append("\n\nRecommended: ").Append(escalation.RecommendedOption);
         }
-        var send = await context.Broker.InvokeCapabilityAsync(
-            new RequestCapability
-            {
-                RequestId = Guid.NewGuid().ToString("N"),
-                Capability = ChiefOfStaffProfile.SendCommunicationMessageCapability,
-                ContentType = "application/json",
-                Payload = ByteString.CopyFrom(SerializePayload(new SendCommunicationMessageRequest(
-                    ownerChat.Id,
-                    content.ToString(),
-                    escalation.IdempotencyKey)))
-            },
-            escalation.SourceEventId.ToString("N"),
+        _ = await context.Platform.InvokeAsync<SendCommunicationMessageRequest, JsonElement>(
+            ChiefOfStaffProfile.SendCommunicationMessageCapability,
+            new SendCommunicationMessageRequest(
+                ownerChat.Id,
+                content.ToString(),
+                escalation.IdempotencyKey),
             cancellationToken);
-        if (!send.Succeeded)
-            throw new InvalidOperationException($"The Chief could not send the executive question: {send.Error}");
         return new ProductEscalationResponse(
             true,
             "Delivered",
@@ -1005,70 +934,35 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
         foreach (var productManager in productManagers)
         {
+            if (productManager.AgentInstallationId is not { } agentInstallationId)
+                continue;
             var brief = ChiefOfStaffOrchestrator.BuildProductRoleBrief(
                 operatingContext,
                 chiefId,
                 productManager.Id);
-            var result = await context.Broker.InvokeCapabilityAsync(
-                new RequestCapability
-                {
-                    RequestId = Guid.NewGuid().ToString("N"),
-                    Capability = ProductManagementCapabilities.ContextUpdate,
-                    TargetAgentId = $"installation:{productManager.AgentInstallationId!.Value:D}",
-                    ContentType = "application/json",
-                    Payload = ByteString.CopyFrom(SerializePayload(new ProductContextUpdateRequest(
-                        brief,
-                        sourceId,
-                        $"product-context:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}")))
-                },
-                sourceEventId,
+            _ = sourceEventId;
+            var update = await context.Platform.InvokeAsync<ProductContextUpdateRequest, ProductContextUpdateResponse>(
+                ProductManagementCapabilities.ContextUpdate,
+                new ProductContextUpdateRequest(
+                    brief,
+                    sourceId,
+                    $"product-context:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
                 cancellationToken);
-            if (!result.Succeeded)
-            {
-                _logger.LogWarning(
-                    "Chief could not update Product Manager {ProductManagerId}: {Error}",
-                    productManager.Id,
-                    result.Error);
-                continue;
-            }
-
-            var update = DeserializePayload<ProductContextUpdateResponse>(result.Payload);
-            if (update?.PlanRefreshRequired != true) continue;
-            var planResult = await context.Broker.InvokeCapabilityAsync(
-                new RequestCapability
-                {
-                    RequestId = Guid.NewGuid().ToString("N"),
-                    Capability = ProductManagementCapabilities.Plan,
-                    TargetAgentId = $"installation:{productManager.AgentInstallationId.Value:D}",
-                    ContentType = "application/json",
-                    Payload = ByteString.CopyFrom(SerializePayload(new ProductPlanRequest(
-                        brief,
-                        "Refresh the product strategy, roadmap themes, product-team structure, and hiring sequence after this authoritative context change.",
-                        sourceId,
-                        $"product-refresh-plan:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}")))
-                },
-                sourceEventId,
+            if (!update.PlanRefreshRequired) continue;
+            var plan = await context.Platform.InvokeAsync<ProductPlanRequest, ProductPlanResponse>(
+                ProductManagementCapabilities.Plan,
+                new ProductPlanRequest(
+                    brief,
+                    "Refresh the product strategy, roadmap themes, product-team structure, and hiring sequence after this authoritative context change.",
+                    sourceId,
+                    $"product-refresh-plan:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
                 cancellationToken);
-            if (!planResult.Succeeded)
-            {
-                _logger.LogWarning(
-                    "Chief could not refresh the plan from Product Manager {ProductManagerId}: {Error}",
-                    productManager.Id,
-                    planResult.Error);
-                continue;
-            }
-            var plan = DeserializePayload<ProductPlanResponse>(planResult.Payload);
-            if (plan is null)
-            {
-                _logger.LogWarning("Product Manager {ProductManagerId} returned an invalid refreshed plan.", productManager.Id);
-                continue;
-            }
             try
             {
                 await ReconcileProductHiringBacklogAsync(
                     new ProductPlanReviewRequest(
                         productManager.Id,
-                        productManager.AgentInstallationId.Value,
+                        agentInstallationId,
                         plan,
                         sourceId,
                         $"product-refresh-review:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
@@ -1115,7 +1009,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private async Task HandleManagementReviewAsync(DeliveredEvent message, AgentRuntimeContext context, CancellationToken cancellationToken)
+    private async Task HandleManagementReviewAsync(AgentEventEnvelope message, AgentRuntimeContext context, CancellationToken cancellationToken)
     {
         var due = DeserializePayload<ManagementReviewDueEvent>(message.Payload);
         if (due is null) { _logger.LogWarning("Ignored malformed management review event {EventId}.", message.EventId); return; }
@@ -1126,14 +1020,10 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             RequestId = due.RequestId
         };
         var report = ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext);
-        await context.Broker.PublishEventAsync(new PublishEvent
-        {
-            EventType = ManagementEvents.StatusReported,
-            SchemaVersion = "1",
-            Subject = $"management-cycle/{due.CycleId}",
-            ContentType = "application/json",
-            Payload = ByteString.CopyFrom(SerializePayload(report))
-        }, message.EventId, cancellationToken);
+        _ = await context.Platform.InvokeAsync<ManagementStatusReport, JsonElement>(
+            "platform.management.status-report.v1",
+            report,
+            cancellationToken);
     }
 
     private static Task WriteRunLogAsync(

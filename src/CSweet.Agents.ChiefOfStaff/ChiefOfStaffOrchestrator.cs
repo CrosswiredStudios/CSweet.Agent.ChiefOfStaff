@@ -54,10 +54,24 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
         var maxAlternatives = settings.GetDecimal("maxAlternatives") is { } alternativeValue ? (int)alternativeValue : 2;
         var custom = settings.GetString("customInstructions");
         var nextQuestion = HighestValueDiscoveryQuestion(context.BusinessProfile, context.FinancialProfile);
+        var productLeadershipDefault =
+            IsProductDrivenBusiness(context.BusinessProfile) &&
+            !HasActiveProductManager(context.Organization)
+                ? """
+
+Authoritative staffing default: this is a product-driven business with no active Product Manager.
+Recommend Product Manager as the priority-one hire unless a hard budget, approval, or safety
+constraint prevents hiring. Use search_workforce for current staff or human candidates. Use
+get_available_agents for installed, local-directory, first-party, and marketplace agents with
+product.strategy, product.discovery, product.roadmap, and product-management.plan.v1 before
+recommending a specific candidate.
+"""
+                : string.Empty;
         return $$"""
 {{operatingInstruction}}
 Response tone: {{tone}}. Never propose more than {{maxItems}} primary plan items or {{maxAlternatives}} alternatives.
 {{(string.IsNullOrWhiteSpace(custom) ? string.Empty : $"Owner configuration: {custom}")}}
+{{productLeadershipDefault}}
 
 <authoritative_operating_context>
 {{JsonSerializer.Serialize(context, JsonOptions)}}
@@ -268,9 +282,57 @@ OWNER MESSAGE:
             : $"I've reviewed {profile.Name}, {string.Join(" ", identity)}.";
 
         return question is null
-            ? $"{understood} There is enough business context to begin ranking the roles required to deliver that mission; I'll start with the single highest-impact vacancy."
+            ? IsProductDrivenBusiness(profile) && !HasActiveProductManager(context.Organization)
+                ? $"{understood} This is a product-driven business, so I recommend a Product Manager as the priority-one hire to own customer discovery, product outcomes, strategy, and the product-team plan. I'll search current staff and the unified installed, local-directory, first-party, and marketplace agent catalog for the best fit."
+                : $"{understood} There is enough business context to begin ranking the roles required to deliver that mission; I'll start with the single highest-impact vacancy."
             : $"{understood} Before I rank the first role to fill, {LowercaseFirst(question)}";
     }
+
+    public static bool IsProductDrivenBusiness(BusinessProfileResponse? profile)
+    {
+        if (profile is null) return false;
+        var signals = string.Join(
+            " ",
+            new[]
+            {
+                profile.BusinessType,
+                profile.Industry,
+                profile.Description,
+                profile.Mission,
+                profile.RevenueModel
+            }
+            .Concat(profile.Offerings)
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+        string[] productSignals =
+        [
+            "software",
+            "saas",
+            "application",
+            " app ",
+            "platform",
+            "marketplace",
+            "ecommerce",
+            "e-commerce",
+            "digital product",
+            "consumer product",
+            "hardware",
+            "subscription product"
+        ];
+        var padded = $" {signals} ";
+        return productSignals.Any(signal =>
+            padded.Contains(signal, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasActiveProductManager(OrganizationSnapshotResponse? organization) =>
+        organization?.People.Any(person =>
+        {
+            if (!person.IsActive) return false;
+            var roleName = person.RoleId.HasValue
+                ? organization.Roles.SingleOrDefault(role => role.Id == person.RoleId.Value)?.Name
+                : null;
+            return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                   person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
+        }) == true;
 
     public static ProductRoleBriefResponse BuildProductRoleBrief(
         ChiefOperatingContext context,

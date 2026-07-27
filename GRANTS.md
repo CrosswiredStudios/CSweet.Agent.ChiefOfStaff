@@ -3,20 +3,25 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-version `1.7.0`.
+package version `1.8.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
-`CSweet.Agent.SDK` 0.6.0; manifest-audit tests reject names missing from that catalog.
+`CSweet.Agent.SDK` 1.0; manifest-audit tests reject names missing from that catalog.
 
 ## How to read this catalog
 
 - **Required grants** are capabilities the installation asks C-Sweet for permission to invoke.
-- **Provided capabilities** are brokered operations this agent exposes to C-Sweet or another
+- **Provided capabilities** are durable operations this agent exposes to C-Sweet or another
   authorized agent. They are not permissions granted to this installation.
 - `organization` scope restricts access to the organization containing the installation.
 - `user` scope restricts access to the current authorized user's data.
-- Event subscriptions and publications are transport contracts, not capability grants, and remain
-  documented in the manifest.
+- Event subscriptions are durable delivery contracts, not capability grants. Generic
+  event publication is not supported in protocol v2.
+
+This file is generated from the authoritative SDK capability catalog and the v2 manifest. Each
+provided descriptor's input/output schemas, timeout, and idempotency are defined in
+`csweet-plugin.json`; installation grants add scope, risk, approval, quota, and owning-service
+policy at runtime.
 
 ## Required grants by service and feature
 
@@ -43,6 +48,7 @@ Serialized capability names are sourced from the authoritative `CapabilityCatalo
 |---|---|---|
 | `platform.workstream.plan.propose.v1` | organization | Propose outcome-oriented managed workstreams. |
 | `platform.workforce.search.v1` | organization | Find suitable current, installed, marketplace, or human resources. |
+| `platform.agent-catalog.search.v1` | organization | Read the unified installed, local-directory, first-party, and marketplace agent catalog through MCP. |
 | `platform.workforce-plan.propose.v1` | organization | Propose an explainable organization and staffing plan. |
 | `platform.approval.propose.v1` | organization | Present separately gated actions for approval. |
 

@@ -1,34 +1,19 @@
 # C-Sweet Chief of Staff
 
-See [`GRANTS.md`](GRANTS.md) for the complete capability catalog organized by service and feature.
+First-party Chief of Staff agent for C-Sweet. The catalog repository name is `CSweet.Agent.ChiefOfStaff`; this checkout retains the historical `CSweetAgentChiefOfStaff` name.
 
-This first-party implementation uses exactly the same GitHub import, grant, isolated build,
-launch, broker authorization, and employee-binding path as third-party agents. Any valid agent
-may be assigned the Chief role; this implementation is a suggested catalog entry, not a privileged
-runtime.
+The agent uses `CSweet.Agent.SDK` 1.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, and discovery.
 
-The Chief loads authoritative business, finance, organization, pattern, management-cycle, and its
-own ranked hiring-backlog state before responding. It specializes in organizational design and
-workforce planning: it keeps the complete role backlog current, gives the owner only a brief team
-overview, and focuses each hiring conversation on the highest-priority unfilled role. Domain
-execution belongs to the agents or people it recommends.
+It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. When an active Product Manager reports to it, coordination uses approved same-organization capability bindings; neither agent selects the other installation.
 
-For each top-level outcome it proposes one workstream and one accountable delivery manager. It
-searches capable current staff and installed digital workers first, reports disconnected
-marketplaces honestly, and treats installation, permission expansion, spending, human outreach,
-and engagement as separate approval gates.
+## Runtime behavior
 
-When an active Product Manager reports to the Chief, the agents coordinate through installation-
-targeted broker capabilities. The Chief supplies the initial product role brief, communicates
-executive information gaps to the owner, consults the Product Manager before product decisions,
-reviews product-team proposals, keeps ownership of the ranked hiring backlog, and pushes
-idempotent context updates after relevant owner and platform events.
-
-## Requirements
-
-- .NET 10 SDK
-- `CSweet.Agent.SDK` 0.6.0 from NuGet.org
-- A C-Sweet broker endpoint and approved agent installation
+- User-message and management-review events are durable work.
+- Assistant streaming is reported as durable progress; the callback terminal result completes work.
+- Onboarding is acknowledged only after its communication side effect succeeds.
+- Company mutations use explicit platform capabilities and their approval/idempotency rules.
+- Model tools are loaded from the live grant revision.
+- Provider and service credentials never enter the process.
 
 ## Build
 
@@ -37,22 +22,12 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-For pre-publication SDK testing, add the directory containing `CSweet.Agent.SDK.0.6.0.nupkg` as an
-additional restore source rather than changing this repository's package reference.
+Requirements are .NET 10, `CSweet.Agent.SDK` 1.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
-## Import
+## SDK 1.0 migration
 
-Push this repository publicly and paste its GitHub URL into C-Sweet's agent importer. Review and
-approve only the requested permissions, events, and capabilities required by the installation.
+The protocol-v1 transport APIs were removed. The agent now uses `AgentEventEnvelope`, `AgentCapabilityRequest`, `AgentWorkResult`, `AgentRuntimeContext.Platform`, `ReportProgressAsync`, `GetModelToolsAsync`, and `PlatformChatClient`. The v2 manifest contains capability schemas/timeouts/idempotency and no generic publications.
 
-The agent requests model responses through `platform.llm.chat-stream.v1`; provider credentials
-remain inside C-Sweet and are never supplied to this process.
+## Provided capability behavior
 
-At runtime the Chief uses the employee display name assigned when it was hired. Its package name
-and package ID identify the implementation, while the C-Sweet broker supplies and enforces its
-current organization role and self-identity for every model request.
-
-The Chief also produces deterministic executive briefing Markdown after activation, after a new
-runtime instance starts, and when the platform's durable management cycle becomes due. Briefings
-prioritize immediate actions and decisions from the authoritative operating snapshot and carry a
-request identifier so the platform can deliver them exactly once.
+Each `provides` entry in `csweet-plugin.json` is an exact durable work callback. Assistant and check-in operations may generate progress and a durable result. Product role briefs are read-only. Plan review can update the installation-scoped hiring backlog through explicit platform tools. Product escalation sends an external communication and uses the supplied idempotency key. Configuration update durably changes runtime configuration. Full contracts and requested authority are in [GRANTS.md](GRANTS.md).

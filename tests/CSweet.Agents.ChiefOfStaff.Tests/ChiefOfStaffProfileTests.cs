@@ -64,10 +64,10 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(AgentConfigurationCapabilities.Update, provides);
         Assert.Contains(PlatformCapabilities.BusinessProfileRead, requires);
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
+        Assert.Contains(AgentCatalogCapabilities.Search, requires);
         Assert.Contains(PlatformCapabilities.BudgetEvaluate, requires);
         Assert.Contains(PlatformCapabilities.ManagementCycleRead, requires);
-        Assert.DoesNotContain(PlatformCapabilities.UserInputRequest, requires);
-        Assert.Contains(PlatformCapabilities.UserInputRequest, PlatformCapabilities.Global);
+        Assert.Contains(PlatformCapabilities.UserInputRequest, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
         Assert.Contains(PlatformCapabilities.HiringWorkflowStage, requires);
@@ -86,6 +86,9 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Never print, describe, or imitate a tool call", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ask one concise plain-text question instead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Consult an active Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("get_available_agents", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local-directory agents", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -134,6 +137,60 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Make expert-led outdoor experiences accessible", message);
         Assert.Contains("who is the first specific customer", message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("what you're building", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProductDrivenBusiness_DefaultsToProductManagerAndEmbeddedCandidateSearch()
+    {
+        var organizationId = Guid.NewGuid();
+        var profile = new BusinessProfileResponse(
+            organizationId,
+            "Trailwise",
+            "Marketplace",
+            "Outdoor recreation",
+            "A software marketplace for guided outdoor trips.",
+            "Make expert-led outdoor experiences accessible.",
+            "Validation",
+            ["New outdoor enthusiasts"],
+            ["Guided trip bookings"],
+            "Booking commission",
+            ["United States"],
+            null,
+            [],
+            [],
+            "Moderate",
+            "America/Los_Angeles",
+            1,
+            1m,
+            new Dictionary<string, ProfileFieldProvenance>());
+        var finance = new FinancialOperatingProfileResponse(
+            organizationId,
+            "USD",
+            100_000m,
+            null,
+            null,
+            null,
+            10_000m,
+            null,
+            1,
+            "DigitalFirst",
+            1);
+        var context = new ChiefOperatingContext(profile, finance, null, null, null, null, []);
+        var orchestrator = new ChiefOfStaffOrchestrator(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ChiefOfStaffOrchestrator>.Instance);
+
+        var prompt = orchestrator.BuildGroundedPrompt(
+            "Who should I hire first?",
+            ChiefOfStaffProfile.ConverseCapability,
+            context,
+            new AgentSettings(new Dictionary<string, JsonElement>()));
+        var fallback = ChiefOfStaffOrchestrator.BuildContextualOnboardingFallback(context);
+
+        Assert.True(ChiefOfStaffOrchestrator.IsProductDrivenBusiness(profile));
+        Assert.Contains("Product Manager as the priority-one hire", prompt);
+        Assert.Contains("get_available_agents", prompt);
+        Assert.Contains("Product Manager as the priority-one hire", fallback);
+        Assert.Contains("unified installed, local-directory, first-party, and marketplace agent catalog", fallback);
     }
 
     [Fact]
