@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.9.1";
+    public const string Version = "1.9.2";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
