@@ -638,7 +638,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
             StoreAssistantMessages = true,
             FailOpen = true
         });
-        var memoryStore = new CSweetPlatformMemoryStore(runtimeContext.Platform);
+        var memoryStore = new ChiefPlatformMemoryStore(runtimeContext.Platform);
         var memoryEngine = new MemoryEngine(
             memoryStore,
             memoryOptions,

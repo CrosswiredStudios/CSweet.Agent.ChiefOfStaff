@@ -9,7 +9,6 @@
   <ItemGroup>
     <PackageReference Include="CSweet.Agent.SDK" Version="1.0.0" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />
     <PackageReference Include="CSweet.Memory" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
-    <PackageReference Include="CSweet.Memory.Broker" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="CSweet.Memory.MicrosoftAgentFramework" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
@@ -17,7 +16,6 @@
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalCSweetMemory)' == 'true'">
     <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory\CSweet.Memory.csproj" />
-    <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory.Broker\CSweet.Memory.Broker.csproj" />
     <ProjectReference Include="$(CSweetMemoryRepositoryRoot)\src\CSweet.Memory.MicrosoftAgentFramework\CSweet.Memory.MicrosoftAgentFramework.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(UseLocalCSweetAgentSdk)' == 'true'">
