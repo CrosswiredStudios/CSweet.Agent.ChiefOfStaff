@@ -289,6 +289,23 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             sequence,
             builder.Length);
 
+        try
+        {
+            await AttachMentionedHiringActionAsync(
+                incoming.TurnId,
+                builder.ToString(),
+                $"user-message:{message.EventId}",
+                context,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not attach a suggested hiring action to chat turn {TurnId}.",
+                incoming.TurnId);
+        }
+
         await WriteRunLogAsync(
             incoming.ProviderProfileId,
             incoming.Message,
@@ -544,6 +561,36 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             next.Title,
             $"{idempotencyPrefix}:action:{next.Id:N}",
             context,
+            cancellationToken);
+    }
+
+    private async Task AttachMentionedHiringActionAsync(
+        Guid chatTurnId,
+        string response,
+        string idempotencyPrefix,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (chatTurnId == Guid.Empty || string.IsNullOrWhiteSpace(response)) return;
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        var next = backlog.Recommendations
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.CreatedAt)
+            .FirstOrDefault();
+        if (next is null ||
+            !response.Contains(next.Title, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _ = await context.Platform.InvokeAsync<SuggestUserActionRequest, JsonElement>(
+            ChiefOfStaffProfile.SuggestUserActionCapability,
+            new SuggestUserActionRequest(
+                null,
+                chatTurnId,
+                ChiefOfStaffProfile.HiringMarketplaceBrowseWorkflow,
+                "Browse candidates",
+                $"Review Marketplace candidates for the {next.Title} role.",
+                JsonSerializer.SerializeToElement(new { role = next.Title }),
+                $"{idempotencyPrefix}:action:{next.Id:N}"),
             cancellationToken);
     }
 

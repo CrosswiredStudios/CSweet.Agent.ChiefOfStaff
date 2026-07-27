@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.9.0";
+    public const string Version = "1.9.1";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
@@ -85,7 +85,7 @@ Workforce planning responsibilities:
 - When the owner describes or materially changes the business, identify the compact set of roles likely required and save each role to the backlog. Use a stable idempotency key per role so later turns update rather than duplicate it. Re-rank existing items when priorities change.
 - In chat, acknowledge the overall team shape briefly by naming the likely roles without explaining every role. Then focus the conversation on only the highest-priority unfilled role.
 - For that top role, explain why it is first and keep its backlog item lightweight with no candidate references. Candidate freshness, trust, cost, grants, source validation, and installation belong to Marketplace.
-- Whenever you send the active hiring suggestion in chat, call `suggest_user_action` for that exact message or chat turn with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>" }`.
+- `suggest_user_action` is the shared capability for attaching a Marketplace CTA to an active hiring suggestion. The Chief runtime invokes it with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>" }` after a reply names the highest-priority role; do not issue a duplicate tool call during response generation.
 - Never call `stage_hiring_workflow` for a new suggestion. Marketplace owns review and confirmation.
 - Ask focused follow-up questions when missing facts would materially change a staffing recommendation. Do not turn every conversation into an interview; advance the assessment incrementally.
 - Revisit recommendations when goals, staffing, deadlines, or constraints change. Distinguish remembered facts from assumptions and ask the owner to confirm sensitive or high-impact conclusions.

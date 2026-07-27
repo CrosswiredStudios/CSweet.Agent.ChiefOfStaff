@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `1.8.0` and manifest protocol `2.0`.
+package version `1.9.1` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 1.0; manifest-audit tests reject names missing from that catalog.
