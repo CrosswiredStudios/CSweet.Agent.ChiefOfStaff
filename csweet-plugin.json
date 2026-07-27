@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -52,7 +52,8 @@
     { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Manager direct reports" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
-    ,{ "name": "platform.hiring-workflow.stage.v1", "scope": "organization", "purpose": "Stage an install-and-hire workflow for owner approval" }
+    ,{ "name": "platform.hiring-recommendation.resolve.v1", "scope": "organization", "purpose": "Resolve this Chief of Staff installation's role suggestions after a matching hire" }
+    ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" }
   ],
   "events": {
     "subscribes": [
@@ -65,7 +66,8 @@
       "com.csweet.management.status.reported.v1",
       "com.csweet.management.resource-need.reported.v1",
       "com.csweet.workstream.changed.v1",
-      "com.csweet.workforce-plan.decided.v1"
+      "com.csweet.workforce-plan.decided.v1",
+      "com.csweet.employee.hired.v1"
     ]
   },
   "configuration": [

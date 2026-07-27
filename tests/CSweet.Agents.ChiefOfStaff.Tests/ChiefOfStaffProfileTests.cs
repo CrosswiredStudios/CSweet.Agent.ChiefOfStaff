@@ -56,8 +56,15 @@ public sealed class ChiefOfStaffProfileTests
             .Select(x => x.GetProperty("name").GetString()).ToList();
         var requires = manifest.RootElement.GetProperty("requires").EnumerateArray()
             .Select(x => x.GetProperty("name").GetString()).ToList();
+        var subscriptions = manifest.RootElement.GetProperty("events").GetProperty("subscribes")
+            .EnumerateArray().Select(x => x.GetString()).ToList();
 
-        Assert.All(provides.Concat(requires), capability =>
+        var extensionCapabilities = new[]
+        {
+            ChiefOfStaffProfile.ResolveHiringRecommendationCapability,
+            ChiefOfStaffProfile.SuggestUserActionCapability
+        };
+        Assert.All(provides.Concat(requires).Except(extensionCapabilities), capability =>
             Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
         Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
@@ -70,7 +77,10 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(PlatformCapabilities.UserInputRequest, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
-        Assert.Contains(PlatformCapabilities.HiringWorkflowStage, requires);
+        Assert.Contains(ChiefOfStaffProfile.ResolveHiringRecommendationCapability, requires);
+        Assert.Contains(ChiefOfStaffProfile.SuggestUserActionCapability, requires);
+        Assert.DoesNotContain(PlatformCapabilities.HiringWorkflowStage, requires);
+        Assert.Contains(ChiefOfStaffProfile.EmployeeHiredEvent, subscriptions);
         Assert.Contains(ProductManagementCapabilities.RoleBrief, provides);
         Assert.Contains(ProductManagementCapabilities.PlanReview, provides);
         Assert.Contains(ProductManagementCapabilities.Escalation, provides);
@@ -87,8 +97,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("ask one concise plain-text question instead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Consult an active Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("get_available_agents", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("local-directory agents", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -188,9 +198,17 @@ public sealed class ChiefOfStaffProfileTests
 
         Assert.True(ChiefOfStaffOrchestrator.IsProductDrivenBusiness(profile));
         Assert.Contains("Product Manager as the priority-one hire", prompt);
-        Assert.Contains("get_available_agents", prompt);
         Assert.Contains("Product Manager as the priority-one hire", fallback);
-        Assert.Contains("unified installed, local-directory, first-party, and marketplace agent catalog", fallback);
+        Assert.Contains("Browse Marketplace candidates", fallback);
+    }
+
+    [Theory]
+    [InlineData("Product Manager", "productmanager")]
+    [InlineData("Product Manager (Agent)", "productmanager")]
+    [InlineData(" product-manager ", "productmanager")]
+    public void HiredRoleIdentity_IsNormalizedDeterministically(string value, string expected)
+    {
+        Assert.Equal(expected, ChiefOfStaffAgent.NormalizeRoleIdentity(value));
     }
 
     [Fact]

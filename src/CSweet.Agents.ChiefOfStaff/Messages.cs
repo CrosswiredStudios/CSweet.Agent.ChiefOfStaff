@@ -14,6 +14,33 @@ public sealed record SendCommunicationMessageRequest(
     string Content,
     string IdempotencyKey);
 
+public sealed record EmployeeHiredEvent(
+    Guid OrganizationId,
+    Guid OrganizationUserId,
+    string EmployeeType,
+    Guid? RoleId,
+    string? RoleTitle,
+    Guid? AgentInstallationId,
+    Guid? WorkerId,
+    Guid? ReportsToOrganizationUserId,
+    Guid? HiringOrganizationUserId,
+    string Source,
+    DateTimeOffset OccurredAt);
+
+public sealed record ResolveHiringRecommendationRequest(
+    Guid RecommendationId,
+    Guid ResultOrganizationUserId,
+    string IdempotencyKey);
+
+public sealed record SuggestUserActionRequest(
+    Guid? MessageId,
+    Guid? ChatTurnId,
+    string WorkflowType,
+    string Label,
+    string? Description,
+    System.Text.Json.JsonElement Parameters,
+    string IdempotencyKey);
+
 public sealed record CompleteAgentOnboardingRequest(Guid EventId);
 
 public sealed record UserMessageReceived(

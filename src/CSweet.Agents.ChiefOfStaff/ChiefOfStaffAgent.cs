@@ -105,6 +105,12 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
+        if (string.Equals(message.EventType, ChiefOfStaffProfile.EmployeeHiredEvent, StringComparison.Ordinal))
+        {
+            await HandleEmployeeHiredAsync(message, context, cancellationToken);
+            return;
+        }
+
         if (string.Equals(message.EventType, ManagementEvents.ReviewDue, StringComparison.Ordinal))
         {
             await HandleManagementReviewAsync(message, context, cancellationToken);
@@ -432,12 +438,16 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             eventId,
             context,
             cancellationToken);
-        _ = await context.Platform.InvokeAsync<SendCommunicationMessageRequest, JsonElement>(
-            ChiefOfStaffProfile.SendCommunicationMessageCapability,
-            new SendCommunicationMessageRequest(
-                onboarding.ConversationId,
-                openingMessage,
-                $"agent-onboarded:{message.EventId}"),
+        var openingMessageId = await SendCommunicationMessageAsync(
+            onboarding.ConversationId,
+            openingMessage,
+            $"agent-onboarded:{message.EventId}",
+            context,
+            cancellationToken);
+        await AttachTopHiringActionAsync(
+            openingMessageId,
+            $"agent-onboarded:{message.EventId}",
+            context,
             cancellationToken);
 
         _ = await context.Platform.InvokeAsync<CompleteAgentOnboardingRequest, JsonElement>(
@@ -449,6 +459,159 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
             message.EventId,
             onboarding.ConversationId);
+    }
+
+    private async Task HandleEmployeeHiredAsync(
+        AgentEventEnvelope message,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var hired = DeserializePayload<EmployeeHiredEvent>(message.Payload);
+        if (hired is null ||
+            hired.OrganizationId == Guid.Empty ||
+            hired.OrganizationUserId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(hired.RoleTitle) ||
+            !string.Equals(context.BusinessId, hired.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Ignored malformed employee hired event {EventId}.", message.EventId);
+            return;
+        }
+
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        var hiredRole = NormalizeRoleIdentity(hired.RoleTitle);
+        var matches = backlog.Recommendations
+            .Where(x => string.Equals(NormalizeRoleIdentity(x.Title), hiredRole, StringComparison.Ordinal))
+            .ToList();
+        if (matches.Count != 1)
+        {
+            if (matches.Count > 1)
+                _logger.LogWarning(
+                    "Employee hired event {EventId} matched {Count} Chief suggestions for role {Role}; no suggestion was resolved.",
+                    message.EventId,
+                    matches.Count,
+                    hired.RoleTitle);
+            return;
+        }
+
+        var matched = matches[0];
+        var next = backlog.Recommendations
+            .Where(x => x.Id != matched.Id)
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.CreatedAt)
+            .FirstOrDefault();
+        var ownerChat = await FindOwnerChatAsync(context, cancellationToken);
+        var content = next is null
+            ? $"{hired.RoleTitle} is now hired. Your current hiring backlog is complete."
+            : $"{hired.RoleTitle} is now hired. The next priority is **{next.Title}**: {next.Objective}";
+        var sentMessageId = await SendCommunicationMessageAsync(
+            ownerChat.Id,
+            content,
+            $"employee-hired:{message.EventId}:next",
+            context,
+            cancellationToken);
+        if (next is not null)
+        {
+            await SuggestMarketplaceActionAsync(
+                sentMessageId,
+                next.Title,
+                $"employee-hired:{message.EventId}:action:{next.Id:N}",
+                context,
+                cancellationToken);
+        }
+        _ = await context.Platform.InvokeAsync<ResolveHiringRecommendationRequest, JsonElement>(
+            ChiefOfStaffProfile.ResolveHiringRecommendationCapability,
+            new ResolveHiringRecommendationRequest(
+                matched.Id,
+                hired.OrganizationUserId,
+                $"employee-hired:{message.EventId}:resolve:{matched.Id:N}"),
+            cancellationToken);
+    }
+
+    private async Task AttachTopHiringActionAsync(
+        Guid messageId,
+        string idempotencyPrefix,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        var next = backlog.Recommendations
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.CreatedAt)
+            .FirstOrDefault();
+        if (next is null) return;
+        await SuggestMarketplaceActionAsync(
+            messageId,
+            next.Title,
+            $"{idempotencyPrefix}:action:{next.Id:N}",
+            context,
+            cancellationToken);
+    }
+
+    private static async Task SuggestMarketplaceActionAsync(
+        Guid messageId,
+        string role,
+        string idempotencyKey,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        _ = await context.Platform.InvokeAsync<SuggestUserActionRequest, JsonElement>(
+            ChiefOfStaffProfile.SuggestUserActionCapability,
+            new SuggestUserActionRequest(
+                messageId,
+                null,
+                ChiefOfStaffProfile.HiringMarketplaceBrowseWorkflow,
+                "Browse candidates",
+                $"Review Marketplace candidates for the {role} role.",
+                JsonSerializer.SerializeToElement(new { role }),
+                idempotencyKey),
+            cancellationToken);
+    }
+
+    private static async Task<Guid> SendCommunicationMessageAsync(
+        Guid chatId,
+        string content,
+        string idempotencyKey,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var response = await context.Platform.InvokeAsync<SendCommunicationMessageRequest, JsonElement>(
+            ChiefOfStaffProfile.SendCommunicationMessageCapability,
+            new SendCommunicationMessageRequest(chatId, content, idempotencyKey),
+            cancellationToken);
+        if (response.TryGetProperty("id", out var id) && id.TryGetGuid(out var messageId))
+            return messageId;
+        throw new InvalidOperationException("The communication service did not return the created message identity.");
+    }
+
+    private static async Task<CommunicationChatResponse> FindOwnerChatAsync(
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
+            throw new InvalidOperationException("The Chief employee identity is unavailable.");
+        var hub = await context.Platform.InvokeAsync<JsonElement, CommunicationHubResponse>(
+            ChiefOfStaffProfile.ReadCommunicationCapability,
+            JsonSerializer.Deserialize<JsonElement>("{}"),
+            cancellationToken);
+        return hub.Chats
+            .Where(x => x.IsDirect &&
+                        x.Participants.Any(p => p.OrganizationUserId == chiefId) &&
+                        x.Participants.Any(p => p.EmployeeType.Equals("Human", StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(x => x.IsDeletionProtected)
+            .ThenByDescending(x => x.UpdatedAt)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException("The Chief has no protected owner conversation.");
+    }
+
+    internal static string NormalizeRoleIdentity(string value)
+    {
+        var cleaned = value.Trim();
+        if (cleaned.EndsWith("(Agent)", StringComparison.OrdinalIgnoreCase))
+            cleaned = cleaned[..^"(Agent)".Length].TrimEnd();
+        return new string(cleaned
+            .ToLowerInvariant()
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
     }
 
     private async Task<string> GenerateOnboardingMessageAsync(

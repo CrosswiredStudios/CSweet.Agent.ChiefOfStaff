@@ -283,7 +283,7 @@ OWNER MESSAGE:
 
         return question is null
             ? IsProductDrivenBusiness(profile) && !HasActiveProductManager(context.Organization)
-                ? $"{understood} This is a product-driven business, so I recommend a Product Manager as the priority-one hire to own customer discovery, product outcomes, strategy, and the product-team plan. I'll search current staff and the unified installed, local-directory, first-party, and marketplace agent catalog for the best fit."
+                ? $"{understood} This is a product-driven business, so I recommend a Product Manager as the priority-one hire to own customer discovery, product outcomes, strategy, and the product-team plan. Browse Marketplace candidates when you're ready to review the role."
                 : $"{understood} There is enough business context to begin ranking the roles required to deliver that mission; I'll start with the single highest-impact vacancy."
             : $"{understood} Before I rank the first role to fill, {LowercaseFirst(question)}";
     }

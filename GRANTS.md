@@ -66,7 +66,8 @@ policy at runtime.
 |---|---|---|
 | `platform.hiring-recommendation.list.v1` | organization | Read this Chief installation's ranked role backlog. |
 | `platform.hiring-recommendation.upsert.v1` | organization | Maintain ranked hiring recommendations. |
-| `platform.hiring-workflow.stage.v1` | organization | Stage an install-and-hire workflow for owner approval. |
+| `platform.hiring-recommendation.resolve.v1` | organization | Resolve a matching role suggestion after a hire event. |
+| `platform.user-action.suggest.v1` | organization | Attach a platform-resolved Marketplace action to a Chief message. |
 
 These grants are Chief-owned. Product Manager installations deliberately do not receive them.
 
