@@ -87,6 +87,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(ProductManagementCapabilities.Plan, requires);
         Assert.Contains(ProductManagementCapabilities.ContextUpdate, requires);
         Assert.Contains(ChiefOfStaffProfile.ReadCommunicationCapability, requires);
+        Assert.Contains(AgentLifecycleCapabilities.CompleteOnboarding, requires);
         Assert.Contains("at most one high-value question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);

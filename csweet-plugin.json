@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -47,6 +47,7 @@
     { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
     { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
     { "name": "communication.chat.read.v1", "scope": "organization", "purpose": "Find the Chief's protected CEO conversation for delegated executive questions" },
+    { "name": "agent.onboarding.complete.v1", "scope": "organization", "purpose": "Acknowledge completion of this installation's durable onboarding event" },
     { "name": "communication.chat.create.v1", "scope": "organization", "purpose": "Open or reuse a direct conversation with the Chief's current manager" },
     { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" },
     { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult the active Product Manager on product and product-team decisions" },

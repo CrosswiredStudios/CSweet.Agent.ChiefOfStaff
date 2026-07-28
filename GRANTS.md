@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `1.9.1` and manifest protocol `2.0`.
+package version `1.9.3` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 1.0; manifest-audit tests reject names missing from that catalog.
@@ -90,6 +90,7 @@ These grants are Chief-owned. Product Manager installations deliberately do not 
 | `communication.chat.read.v1` | organization | Locate the Chief's protected CEO conversation for delegated executive questions. |
 | `communication.chat.create.v1` | organization | Open or reuse the direct chat with the Chief's current manager. |
 | `communication.message.send.v1` | organization | Send messages to conversations in which the Chief is a participant. |
+| `agent.onboarding.complete.v1` | organization | Acknowledge this installation's durable onboarding event after its initial manager message is complete. |
 
 ### Product Manager collaboration
 
