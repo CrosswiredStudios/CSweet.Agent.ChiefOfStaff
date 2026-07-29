@@ -1,6 +1,7 @@
 using CSweet.Agents.ChiefOfStaff;
 using CSweet.Agent.SDK;
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CSweet.Agents.ChiefOfStaff.Tests;
 
@@ -247,6 +248,191 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("**Modify: Game Designer**", brief);
         Assert.Contains("**Remove: Legacy Generalist**", brief);
         Assert.Contains("candidate-free hiring suggestions", brief, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApprovedResourceChange_CreatesHiringSuggestionsAndBriefsChiefManager()
+    {
+        var organizationId = Guid.NewGuid();
+        var chiefInstallationId = Guid.NewGuid();
+        var chiefId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var productManagerId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var managerChatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var roles = new[]
+        {
+            Role("web3d", "Lead Web3D Developer", 1, 1) with
+            {
+                ReportsToOrganizationUserId = productManagerId
+            },
+            Role("quality", "QA / Playtester", 2, 1) with
+            {
+                ReportsToOrganizationUserId = productManagerId
+            }
+        };
+        var request = new ResourceChangeRequestResponse(
+            requestId,
+            organizationId,
+            productManagerId,
+            Guid.NewGuid(),
+            chiefId,
+            Guid.NewGuid(),
+            Guid.Empty,
+            "Ship the first browser game",
+            "The approved team covers product delivery and independent quality.",
+            1,
+            roles,
+            roles.Select(role => new ResourceChangeRoleDelta("Add", role, null)).ToList(),
+            [],
+            [],
+            null,
+            "Approved",
+            "Delivered",
+            "Approved.",
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+        var organization = new OrganizationSnapshotResponse(
+            organizationId,
+            "Active",
+            [
+                new OrganizationPerson(
+                    chiefId, "C-Sweet Chief of Staff", "Agent", null, ownerId, chiefInstallationId, true),
+                new OrganizationPerson(
+                    ownerId, "Owner", "Human", null, null, null, true),
+                new OrganizationPerson(
+                    productManagerId, "C-Sweet Product Manager", "Agent", null, chiefId,
+                    request.RequesterInstallationId, true)
+            ],
+            [],
+            [],
+            [],
+            [],
+            DateTimeOffset.UtcNow);
+        var upserts = new List<UpsertHiringRecommendationRequest>();
+        SendCommunicationMessageRequest? managerMessage = null;
+        SuggestUserActionRequest? suggestedAction = null;
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<JsonElement, OrganizationSnapshotResponse>(
+                PlatformCapabilities.OrganizationSnapshotRead,
+                (_, _) => Task.FromResult(organization))
+            .RegisterCapability<ResourceChangeReadRequest, ResourceChangeReadResponse>(
+                PlatformCapabilities.ResourceChangeRead,
+                (_, _) => Task.FromResult(new ResourceChangeReadResponse([request])))
+            .RegisterCapability<JsonElement, HiringBacklogResponse>(
+                PlatformCapabilities.HiringRecommendationList,
+                (_, _) => Task.FromResult(new HiringBacklogResponse([])))
+            .RegisterCapability<UpsertHiringRecommendationRequest, HiringRecommendationResponse>(
+                PlatformCapabilities.HiringRecommendationUpsert,
+                (input, _) =>
+                {
+                    upserts.Add(input);
+                    return Task.FromResult(new HiringRecommendationResponse(
+                        Guid.NewGuid(),
+                        input.WorkstreamId,
+                        input.Title,
+                        input.Objective,
+                        "Suggested",
+                        input.RecommendedCandidateReference,
+                        [],
+                        DateTimeOffset.UtcNow,
+                        DateTimeOffset.UtcNow)
+                    {
+                        Priority = input.Priority,
+                        RoleKey = input.RoleKey,
+                        Headcount = input.Headcount,
+                        SourceResourceChangeRequestId = input.SourceResourceChangeRequestId
+                    });
+                })
+            .RegisterCapability<JsonElement, CommunicationHubResponse>(
+                ChiefOfStaffProfile.ReadCommunicationCapability,
+                (_, _) => Task.FromResult(new CommunicationHubResponse(
+                    chiefId,
+                    true,
+                    [
+                        new CommunicationChatResponse(
+                            managerChatId,
+                            string.Empty,
+                            null,
+                            true,
+                            true,
+                            true,
+                            true,
+                            DateTimeOffset.UtcNow,
+                            [
+                                new CommunicationParticipantResponse(
+                                    chiefId, "C-Sweet Chief of Staff", "Agent", "Chief of Staff"),
+                                new CommunicationParticipantResponse(ownerId, "Owner", "Human", "CEO")
+                            ],
+                            null,
+                            null,
+                            0)
+                    ],
+                    [],
+                    [])))
+            .RegisterCapability<SendCommunicationMessageRequest, JsonElement>(
+                ChiefOfStaffProfile.SendCommunicationMessageCapability,
+                (input, _) =>
+                {
+                    managerMessage = input;
+                    return Task.FromResult(JsonSerializer.SerializeToElement(new { id = messageId }));
+                })
+            .RegisterCapability<SuggestUserActionRequest, JsonElement>(
+                ChiefOfStaffProfile.SuggestUserActionCapability,
+                (input, _) =>
+                {
+                    suggestedAction = input;
+                    return Task.FromResult(JsonSerializer.SerializeToElement(new { accepted = true }));
+                });
+        var context = runtime.CreateContext(
+            organizationId.ToString("D"),
+            chiefInstallationId.ToString("D"),
+            new AgentIdentity(
+                chiefId.ToString("D"),
+                "C-Sweet Chief of Staff",
+                null,
+                "Chief of Staff",
+                null,
+                [],
+                null,
+                ownerId.ToString("D"),
+                "Owner"));
+        var agent = new ChiefOfStaffAgent(
+            NullLogger<ChiefOfStaffAgent>.Instance,
+            new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+        await agent.HandleEventAsync(
+            new AgentEventEnvelope(
+                Guid.NewGuid(),
+                ManagementEvents.ResourceChangeDecided,
+                JsonSerializer.SerializeToElement(new ResourceChangeDecisionEvent(
+                    requestId,
+                    organizationId,
+                    productManagerId,
+                    chiefId,
+                    "Approved",
+                    DateTimeOffset.UtcNow)),
+                DateTimeOffset.UtcNow),
+            context,
+            CancellationToken.None);
+
+        Assert.Equal(2, upserts.Count);
+        Assert.All(upserts, upsert =>
+        {
+            Assert.Empty(upsert.CandidateReferences);
+            Assert.Null(upsert.RecommendedCandidateReference);
+            Assert.Equal(requestId, upsert.SourceResourceChangeRequestId);
+            Assert.StartsWith($"{productManagerId:N}:", upsert.RoleKey, StringComparison.Ordinal);
+        });
+        Assert.NotNull(managerMessage);
+        Assert.Equal(managerChatId, managerMessage.ChatId);
+        Assert.Contains("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("QA / Playtester", managerMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("candidate-free hiring suggestions", managerMessage.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(suggestedAction);
+        Assert.Equal(messageId, suggestedAction.MessageId);
+        Assert.Equal("Lead Web3D Developer", suggestedAction.Parameters.GetProperty("role").GetString());
     }
 
     [Fact]
