@@ -45,6 +45,11 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Equal(
             ChiefOfStaffProfile.Version,
             manifest.RootElement.GetProperty("version").GetString());
+        var project = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "src", "CSweet.Agents.ChiefOfStaff", "CSweet.Agents.ChiefOfStaff.csproj")));
+        Assert.Contains($"<Version>{ChiefOfStaffProfile.Version}</Version>", project, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -103,6 +108,35 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("highest-priority new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void OnboardingEventIdentity_UsesTheDomainEventIdAndSupportsLegacyCorrelation()
+    {
+        var domainEventId = Guid.NewGuid();
+        var correlationEventId = Guid.NewGuid();
+        var workItemId = Guid.NewGuid();
+        var onboarding = new AgentOnboardedEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            domainEventId);
+        var envelope = new AgentEventEnvelope(
+            workItemId,
+            ChiefOfStaffProfile.OnboardedEvent,
+            JsonSerializer.SerializeToElement(onboarding),
+            DateTimeOffset.UtcNow,
+            correlationEventId.ToString("N"));
+
+        Assert.Equal(
+            domainEventId,
+            ChiefOfStaffAgent.ResolveOnboardingEventId(onboarding, envelope));
+        Assert.Equal(
+            correlationEventId,
+            ChiefOfStaffAgent.ResolveOnboardingEventId(onboarding with { EventId = Guid.Empty }, envelope));
+        Assert.NotEqual(workItemId, domainEventId);
     }
 
     [Fact]

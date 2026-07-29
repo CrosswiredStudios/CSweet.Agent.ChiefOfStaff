@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <Version>1.9.5</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CSweet.Agent.SDK" Version="1.0.2" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />

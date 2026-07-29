@@ -441,8 +441,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     {
         var onboarding = DeserializePayload<AgentOnboardedEvent>(message.Payload)
             ?? throw new InvalidOperationException("The onboarding event payload is empty.");
-        if (!Guid.TryParse(message.EventId, out var eventId) ||
-            onboarding.OrganizationId == Guid.Empty ||
+        var eventId = ResolveOnboardingEventId(onboarding, message);
+        if (onboarding.OrganizationId == Guid.Empty ||
             onboarding.AgentOrganizationUserId == Guid.Empty ||
             onboarding.HiringOrganizationUserId == Guid.Empty ||
             onboarding.ConversationId == Guid.Empty ||
@@ -457,12 +457,12 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         var openingMessageId = await SendCommunicationMessageAsync(
             onboarding.ConversationId,
             openingMessage,
-            $"agent-onboarded:{message.EventId}",
+            $"agent-onboarded:{eventId:N}",
             context,
             cancellationToken);
         await AttachTopHiringActionAsync(
             openingMessageId,
-            $"agent-onboarded:{message.EventId}",
+            $"agent-onboarded:{eventId:N}",
             context,
             cancellationToken);
         await ReconcileApprovedResourceChangesAsync(context, cancellationToken);
@@ -474,8 +474,19 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
 
         _logger.LogInformation(
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
-            message.EventId,
+            eventId,
             onboarding.ConversationId);
+    }
+
+    internal static Guid ResolveOnboardingEventId(
+        AgentOnboardedEvent onboarding,
+        AgentEventEnvelope message)
+    {
+        if (onboarding.EventId != Guid.Empty)
+            return onboarding.EventId;
+        if (Guid.TryParse(message.CorrelationId, out var correlationId))
+            return correlationId;
+        throw new InvalidOperationException("The onboarding event identity is missing.");
     }
 
     private async Task HandleResourceChangeRequestedAsync(
