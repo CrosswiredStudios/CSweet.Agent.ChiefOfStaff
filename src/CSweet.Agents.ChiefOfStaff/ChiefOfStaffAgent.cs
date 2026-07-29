@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using CSweet.Agent.SDK;
 using Microsoft.Agents.AI;
@@ -554,6 +555,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         await RequireActiveChiefAsync(context, cancellationToken);
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         var managerChat = await FindManagerChatAsync(context, cancellationToken);
+        var actionableRecommendations =
+            new List<(ResourceChangeRoleDelta Delta, HiringRecommendationResponse Recommendation)>();
         foreach (var delta in request.Deltas.OrderBy(x => x.Role.Priority))
         {
             var stableRoleKey = $"{request.RequesterOrganizationUserId:N}:{delta.Role.RoleKey}";
@@ -588,25 +591,61 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 },
                 cancellationToken);
 
-            if (delta.ChangeKind is not ("Add" or "Increase")) continue;
-            var content =
-                $"Approved hiring suggestion: **{delta.Role.Title}**\n\n" +
-                $"Objective: {delta.Role.Purpose}\n\n" +
-                $"Priority {delta.Role.Priority} · headcount {delta.Role.Headcount} · timing {delta.Role.Timing}. " +
-                "This creates a candidate-free suggestion only; Marketplace review, spending, installation, and the hire remain separately approved.";
-            var messageId = await SendCommunicationMessageAsync(
-                managerChat.Id,
-                content,
-                $"resource-change:{request.Id:N}:role:{NormalizeKey(delta.Role.RoleKey)}",
-                context,
-                cancellationToken);
+            if (delta.ChangeKind is "Add" or "Increase")
+                actionableRecommendations.Add((delta, recommendation));
+        }
+
+        if (request.Deltas.Count == 0) return;
+        var messageId = await SendCommunicationMessageAsync(
+            managerChat.Id,
+            BuildResourceChangeManagerBrief(request),
+            $"resource-change:{request.Id:N}:manager-brief",
+            context,
+            cancellationToken);
+        var top = actionableRecommendations
+            .OrderBy(x => x.Delta.Role.Priority)
+            .ThenBy(x => x.Delta.Role.Title, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (top != default)
+        {
             await SuggestMarketplaceActionAsync(
                 messageId,
-                delta.Role.Title,
-                $"resource-change:{request.Id:N}:action:{recommendation.Id:N}",
+                top.Delta.Role.Title,
+                $"resource-change:{request.Id:N}:action:{top.Recommendation.Id:N}",
                 context,
                 cancellationToken);
         }
+    }
+
+    internal static string BuildResourceChangeManagerBrief(ResourceChangeRequestResponse request)
+    {
+        var content = new StringBuilder();
+        content.Append("Approved product-team staffing update for **")
+            .Append(request.ProductGoal)
+            .AppendLine("**")
+            .AppendLine();
+        foreach (var delta in request.Deltas
+                     .OrderBy(x => x.Role.Priority)
+                     .ThenBy(x => x.Role.Title, StringComparer.Ordinal))
+        {
+            content.Append("- **")
+                .Append(delta.ChangeKind)
+                .Append(": ")
+                .Append(delta.Role.Title)
+                .Append("** — priority ")
+                .Append(delta.Role.Priority)
+                .Append(", headcount ")
+                .Append(delta.Role.Headcount)
+                .Append(", ")
+                .Append(delta.Role.Timing)
+                .Append(". ")
+                .AppendLine(delta.Role.Purpose);
+        }
+
+        content.AppendLine()
+            .Append("Added and increased roles are now candidate-free hiring suggestions. ")
+            .Append("Marketplace review, spending, installation, and each hire remain separately approved.");
+        return content.ToString();
     }
 
     private async Task<(Guid InstallationId, OrganizationPerson Self, OrganizationSnapshotResponse Organization)>

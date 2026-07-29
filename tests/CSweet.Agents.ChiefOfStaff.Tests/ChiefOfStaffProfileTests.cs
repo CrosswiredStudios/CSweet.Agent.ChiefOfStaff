@@ -100,6 +100,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("highest-priority new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -213,6 +215,41 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
+    public void ResourceChangeManagerBrief_ListsEveryDeltaInPriorityOrder()
+    {
+        var request = ResourceChange(
+            new ResourceChangeRoleDelta(
+                "Increase",
+                Role("quality", "QA / Playtester", 3, 2),
+                Role("quality", "QA / Playtester", 3, 1)),
+            new ResourceChangeRoleDelta(
+                "Add",
+                Role("web3d", "Lead Web3D Developer", 1, 1),
+                null),
+            new ResourceChangeRoleDelta(
+                "Remove",
+                Role("legacy", "Legacy Generalist", 4, 1),
+                Role("legacy", "Legacy Generalist", 4, 1)),
+            new ResourceChangeRoleDelta(
+                "Modify",
+                Role("design", "Game Designer", 2, 1),
+                Role("design", "Game Designer", 2, 1)));
+
+        var brief = ChiefOfStaffAgent.BuildResourceChangeManagerBrief(request);
+
+        var lead = brief.IndexOf("Lead Web3D Developer", StringComparison.Ordinal);
+        var designer = brief.IndexOf("Game Designer", StringComparison.Ordinal);
+        var quality = brief.IndexOf("QA / Playtester", StringComparison.Ordinal);
+        var removed = brief.IndexOf("Legacy Generalist", StringComparison.Ordinal);
+        Assert.True(lead < designer && designer < quality && quality < removed);
+        Assert.Contains("**Add: Lead Web3D Developer**", brief);
+        Assert.Contains("**Increase: QA / Playtester**", brief);
+        Assert.Contains("**Modify: Game Designer**", brief);
+        Assert.Contains("**Remove: Legacy Generalist**", brief);
+        Assert.Contains("candidate-free hiring suggestions", brief, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ManagementReport_ProducesPrioritizedConciseMarkdown()
     {
         var organization = new OrganizationSnapshotResponse(
@@ -242,5 +279,45 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Approve the launch rollback policy", report.Markdown);
         Assert.True(report.ImmediateActions.Count <= 5);
         Assert.True(report.ConversationTopics.Count <= 3);
+    }
+
+    private static ResourceChangeRole Role(string key, string title, int priority, int headcount) =>
+        new(
+            key,
+            "Product",
+            title,
+            $"Own the {title} outcome.",
+            headcount,
+            priority,
+            "Now",
+            [$"{key}.capability"],
+            false,
+            Guid.NewGuid(),
+            null);
+
+    private static ResourceChangeRequestResponse ResourceChange(params ResourceChangeRoleDelta[] deltas)
+    {
+        var organizationId = Guid.NewGuid();
+        return new ResourceChangeRequestResponse(
+            Guid.NewGuid(),
+            organizationId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Ship the first browser game",
+            "The approved team covers product delivery.",
+            1,
+            deltas.Where(x => x.ChangeKind != "Remove").Select(x => x.Role).ToList(),
+            deltas,
+            [],
+            [],
+            null,
+            "Approved",
+            "Delivered",
+            null,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
     }
 }

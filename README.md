@@ -14,6 +14,9 @@ It loads authoritative business, finance, organization, operating-pattern, manag
 - Company mutations use explicit platform capabilities and their approval/idempotency rules.
 - Model tools are loaded from the live grant revision.
 - Provider and service credentials never enter the process.
+- Product Manager resource-change events are validated against the current reporting line,
+  reconciled into the Chief-owned hiring backlog, and summarized to the Chief's manager in one
+  idempotent priority-ordered brief with a single next-role Marketplace action.
 
 ## Build
 
