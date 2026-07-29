@@ -441,7 +441,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     {
         var onboarding = DeserializePayload<AgentOnboardedEvent>(message.Payload)
             ?? throw new InvalidOperationException("The onboarding event payload is empty.");
-        var eventId = ResolveOnboardingEventId(onboarding, message);
+        var eventId = message.EventId;
         if (onboarding.OrganizationId == Guid.Empty ||
             onboarding.AgentOrganizationUserId == Guid.Empty ||
             onboarding.HiringOrganizationUserId == Guid.Empty ||
@@ -467,26 +467,14 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             cancellationToken);
         await ReconcileApprovedResourceChangesAsync(context, cancellationToken);
 
-        _ = await context.Platform.InvokeAsync<CompleteAgentOnboardingRequest, JsonElement>(
-            ChiefOfStaffProfile.CompleteOnboardingCapability,
-            new CompleteAgentOnboardingRequest(eventId),
+        _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
+            message,
             cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
             eventId,
             onboarding.ConversationId);
-    }
-
-    internal static Guid ResolveOnboardingEventId(
-        AgentOnboardedEvent onboarding,
-        AgentEventEnvelope message)
-    {
-        if (onboarding.EventId != Guid.Empty)
-            return onboarding.EventId;
-        if (Guid.TryParse(message.CorrelationId, out var correlationId))
-            return correlationId;
-        throw new InvalidOperationException("The onboarding event identity is missing.");
     }
 
     private async Task HandleResourceChangeRequestedAsync(
@@ -999,17 +987,17 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
     private static Task PublishChunkAsync(
         AgentRuntimeContext context,
-        string correlationId,
+        Guid eventId,
         AssistantResponseChunk chunk,
         CancellationToken cancellationToken)
     {
-        _ = correlationId;
+        _ = eventId;
         return context.ReportProgressAsync(chunk, cancellationToken);
     }
 
     private static Task PublishAgentErrorAsync(
         AgentRuntimeContext context,
-        string correlationId,
+        Guid eventId,
         string conversationId,
         int sequence,
         string message,
@@ -1017,7 +1005,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         int attempt,
         CancellationToken cancellationToken)
     {
-        return PublishChunkAsync(context, correlationId, new AssistantResponseChunk(
+        return PublishChunkAsync(context, eventId, new AssistantResponseChunk(
             conversationId,
             sequence,
             message,
@@ -1360,7 +1348,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
     }
 
     private async Task PushProductManagerContextUpdatesAsync(
-        string sourceEventId,
+        Guid sourceEventId,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
@@ -1368,7 +1356,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
         var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
         var organization = operatingContext.Organization;
         if (organization is null) return;
-        var sourceId = Guid.TryParse(sourceEventId, out var parsed) ? parsed : Guid.NewGuid();
+        var sourceId = sourceEventId;
         var productManagers = organization.People.Where(person =>
         {
             if (!person.IsActive ||

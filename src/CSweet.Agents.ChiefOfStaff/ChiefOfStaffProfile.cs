@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.9.5";
+    public const string Version = "1.10.0";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
@@ -22,7 +22,7 @@ public static class ChiefOfStaffProfile
 
     public const string ConfigurationSchemaVersion = "1.0";
 
-    public const string OnboardedEvent = "com.csweet.agent.onboarded.v1";
+    public const string OnboardedEvent = AgentLifecycleEvents.Onboarded;
 
     public const string SendCommunicationMessageCapability = CommunicationCapabilities.MessageSend;
 
@@ -30,7 +30,6 @@ public static class ChiefOfStaffProfile
 
     public const string CreateCommunicationCapability = CommunicationCapabilities.ChatCreate;
 
-    public const string CompleteOnboardingCapability = AgentLifecycleCapabilities.CompleteOnboarding;
 
     public const string UserMessageReceivedEvent = "com.csweet.user.message.received.v1";
 

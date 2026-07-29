@@ -111,35 +111,6 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
-    public void OnboardingEventIdentity_UsesTheDomainEventIdAndSupportsLegacyCorrelation()
-    {
-        var domainEventId = Guid.NewGuid();
-        var correlationEventId = Guid.NewGuid();
-        var workItemId = Guid.NewGuid();
-        var onboarding = new AgentOnboardedEvent(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            domainEventId);
-        var envelope = new AgentEventEnvelope(
-            workItemId,
-            ChiefOfStaffProfile.OnboardedEvent,
-            JsonSerializer.SerializeToElement(onboarding),
-            DateTimeOffset.UtcNow,
-            correlationEventId.ToString("N"));
-
-        Assert.Equal(
-            domainEventId,
-            ChiefOfStaffAgent.ResolveOnboardingEventId(onboarding, envelope));
-        Assert.Equal(
-            correlationEventId,
-            ChiefOfStaffAgent.ResolveOnboardingEventId(onboarding with { EventId = Guid.Empty }, envelope));
-        Assert.NotEqual(workItemId, domainEventId);
-    }
-
-    [Fact]
     public void DiscoveryPolicy_AsksOnlyTheHighestValueMissingQuestion()
     {
         var profile = new BusinessProfileResponse(
@@ -438,6 +409,7 @@ public sealed class ChiefOfStaffProfileTests
 
         await agent.HandleEventAsync(
             new AgentEventEnvelope(
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 ManagementEvents.ResourceChangeDecided,
                 JsonSerializer.SerializeToElement(new ResourceChangeDecisionEvent(
