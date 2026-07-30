@@ -94,7 +94,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(ProductManagementCapabilities.ContextUpdate, requires);
         Assert.Contains(ChiefOfStaffProfile.ReadCommunicationCapability, requires);
         Assert.Contains(AgentLifecycleCapabilities.CompleteOnboarding, requires);
-        Assert.Contains("at most one high-value question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("single blocking question", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("durable personal to-do list", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -108,6 +108,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Never ask a question in the same response that makes a recommendation", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("do not ask for information merely because a profile field is incomplete", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -125,7 +127,7 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
-    public void ContextualOnboardingFallback_UsesKnownBusinessFactsAndOneMissingFact()
+    public void ContextualOnboardingFallback_RecommendsFirstHireWithoutAppendingDiscoveryQuestion()
     {
         var profile = new BusinessProfileResponse(
             Guid.NewGuid(),
@@ -154,8 +156,102 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Trailwise", message);
         Assert.Contains("Outdoor recreation", message);
         Assert.Contains("Make expert-led outdoor experiences accessible", message);
-        Assert.Contains("who is the first specific customer", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Product Manager as the priority-one hire", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("who is the first specific customer", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("?", message, StringComparison.Ordinal);
         Assert.DoesNotContain("what you're building", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GroundedPrompt_DoesNotInjectRoutineBusinessDiscoveryQuestion()
+    {
+        var profile = new BusinessProfileResponse(
+            Guid.NewGuid(), "Example", "SaaS", "Software", null, null, "Validation",
+            [], [], null, [], null, [], [], null, "UTC", 1, 0.2m,
+            new Dictionary<string, ProfileFieldProvenance>());
+        var context = new ChiefOperatingContext(profile, null, null, null, null, null, []);
+        var orchestrator = new ChiefOfStaffOrchestrator(
+            NullLogger<ChiefOfStaffOrchestrator>.Instance);
+
+        var prompt = orchestrator.BuildGroundedPrompt(
+            "Who should I hire first?",
+            ChiefOfStaffProfile.ConverseCapability,
+            context,
+            new AgentSettings(new Dictionary<string, JsonElement>()));
+
+        Assert.DoesNotContain(
+            "Who is the first specific customer you intend to serve?",
+            prompt,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Never ask and recommend or suggest an action in the same response",
+            prompt,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void OnboardingFormatter_RemovesQuestionWhenResponseAlsoRecommends()
+    {
+        const string response = """
+Role Map: Product Management, Engineering, Marketing
+Priority 1 Hire: Product Manager
+I have added this to your hiring backlog.
+Who is the first specific customer you intend to serve?
+""";
+
+        var formatted = ChiefOfStaffAgent.FormatOnboardingMessage(response);
+
+        Assert.Contains("Product Manager", formatted);
+        Assert.Contains("hiring backlog", formatted);
+        Assert.DoesNotContain("Question for you", formatted);
+        Assert.DoesNotContain("Who is the first specific customer", formatted);
+    }
+
+    [Fact]
+    public void OnboardingFormatter_PreservesQuestionWhenNoRecommendationIsMade()
+    {
+        const string response = """
+I've reviewed the available profile, but it does not identify what kind of business this is.
+What type of business are you building?
+""";
+
+        var formatted = ChiefOfStaffAgent.FormatOnboardingMessage(response);
+
+        Assert.Contains("Question for you", formatted);
+        Assert.Contains("What type of business are you building?", formatted);
+    }
+
+    [Fact]
+    public void ResponseModeGuard_RemovesInlineQuestionAfterRecommendation()
+    {
+        const string response =
+            "The highest priority is to hire a Product Manager. Who is the first specific customer you intend to serve?";
+
+        var validated = ChiefOfStaffAgent.EnforceResponseMode(response);
+
+        Assert.Equal("The highest priority is to hire a Product Manager.", validated);
+    }
+
+    [Fact]
+    public void ResponseModeGuard_DoesNotRemoveQuestionOnlyClarification()
+    {
+        const string response =
+            "I cannot choose the first role responsibly from the available profile. What type of business are you building?";
+
+        var validated = ChiefOfStaffAgent.EnforceResponseMode(response);
+
+        Assert.Equal(response, validated);
+    }
+
+    [Fact]
+    public void ResponseModeGuard_DoesNotMistakeBlockedRecommendationForSuggestion()
+    {
+        const string response =
+            "Before I can recommend a first hire, I need to know what kind of business this is. What type of business are you building?";
+
+        var validated = ChiefOfStaffAgent.EnforceResponseMode(response);
+
+        Assert.Equal(response, validated);
     }
 
     [Fact]

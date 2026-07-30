@@ -210,20 +210,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 }
 
                 builder.Append(update.Delta);
-
-                _logger.LogInformation(
-                    "Chief of Staff publishing chunk for conversation {ConversationId}. Sequence {Sequence}. DeltaLength {DeltaLength}.",
-                    conversationId,
-                    sequence,
-                    update.Delta.Length);
-
-                await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
-                    conversationId,
-                    sequence++,
-                    update.Delta,
-                    IsFinal: false,
-                    TurnId: incoming.TurnId,
-                    Attempt: incoming.Attempt), cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -259,7 +245,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
-        if (builder.Length == 0)
+        var response = EnforceResponseMode(builder.ToString());
+        if (string.IsNullOrWhiteSpace(response))
         {
             _logger.LogWarning(
                 "Chief of Staff generated an empty response for conversation {ConversationId}.",
@@ -287,6 +274,20 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
+        _logger.LogInformation(
+            "Chief of Staff publishing validated response for conversation {ConversationId}. Sequence {Sequence}. ResponseLength {ResponseLength}.",
+            conversationId,
+            sequence,
+            response.Length);
+
+        await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
+            conversationId,
+            sequence++,
+            response,
+            IsFinal: false,
+            TurnId: incoming.TurnId,
+            Attempt: incoming.Attempt), cancellationToken);
+
         await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
             conversationId,
             sequence,
@@ -300,13 +301,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             "Chief of Staff completed streaming for conversation {ConversationId}. Chunks {ChunkCount}. ResponseLength {ResponseLength}.",
             conversationId,
             sequence,
-            builder.Length);
+            response.Length);
 
         try
         {
             await AttachMentionedHiringActionAsync(
                 incoming.TurnId,
-                builder.ToString(),
+                response,
                 $"user-message:{message.EventId}",
                 context,
                 cancellationToken);
@@ -322,7 +323,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         await WriteRunLogAsync(
             incoming.ProviderProfileId,
             incoming.Message,
-            builder.ToString(),
+            response,
             "Completed",
             startedAt,
             stopwatch.ElapsedMilliseconds,
@@ -910,6 +911,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
 This is your first message after being hired into this business. Review the authoritative business, financial, organization, and hiring-backlog context before responding.
 
 Do not use a generic welcome or ask the owner to repeat facts already present in the business profile. If the available data is sufficient, give a brief business-specific assessment, name the compact role map, identify the single most important role to fill first and why, and begin the normal ranked-hiring-backlog workflow. If the available data is insufficient to choose the first role responsibly, state what you already understand and ask only the single highest-value clarification. Do not use a multi-part intake questionnaire.
+Use exactly one path: recommendation or clarification. If you identify a first hire, update or mention the hiring backlog, or suggest a Marketplace action, do not ask any question in that message. Missing details that would merely refine an already supportable recommendation are not a reason to ask. Ask only when one missing fact makes the first-hire decision impossible, and then provide no recommendation or suggested action.
 """;
 
         try
@@ -952,16 +954,21 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
     internal static string FormatOnboardingMessage(string value)
     {
-        var lines = value.Replace("\r\n", "\n", StringComparison.Ordinal)
+        var lines = EnforceResponseMode(value)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Split('\n')
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
             .ToList();
         if (lines.Count == 0) return string.Empty;
 
+        var containsRecommendation = lines.Any(IsHiringRecommendationLine);
         var sections = new List<string>(lines.Count + 2);
         foreach (var line in lines)
         {
+            if (containsRecommendation && line.EndsWith("?", StringComparison.Ordinal))
+                continue;
+
             if (line.StartsWith("Role Map:", StringComparison.OrdinalIgnoreCase))
             {
                 sections.Add($"- **Role map:** {line["Role Map:".Length..].Trim()}");
@@ -983,6 +990,66 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
         return string.Join("\n\n", sections);
     }
+
+    private static bool IsHiringRecommendationLine(string line)
+    {
+        if (line.TrimEnd().EndsWith("?", StringComparison.Ordinal) ||
+            line.Contains("cannot recommend", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("can't recommend", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("unable to recommend", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("before I recommend", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("before I can recommend", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return
+            line.StartsWith("Priority 1 Hire:", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("priority-one hire", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("priority 1 hire", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("first hire", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("highest priority is to hire", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("should hire", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("recommend a ", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("recommend an ", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("I recommend", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("hiring backlog", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("browse candidates", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("browse marketplace", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string EnforceResponseMode(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+
+        var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var lines = normalized.Split('\n');
+        if (!SplitResponseSegments(normalized).Any(IsHiringRecommendationLine)) return value;
+
+        var retained = new List<string>(lines.Length);
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Contains("Question for you", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var parts = System.Text.RegularExpressions.Regex.Split(
+                line,
+                @"(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var statements = parts
+                .Where(part => !part.TrimEnd().EndsWith("?", StringComparison.Ordinal))
+                .ToList();
+            if (statements.Count > 0)
+                retained.Add(string.Join(" ", statements));
+        }
+
+        return string.Join("\n", retained).Trim();
+    }
+
+    private static IEnumerable<string> SplitResponseSegments(string value) =>
+        System.Text.RegularExpressions.Regex.Split(
+            value,
+            @"\n|(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static Task PublishChunkAsync(
         AgentRuntimeContext context,
@@ -1183,7 +1250,7 @@ Do not use a generic welcome or ask the owner to repeat facts already present in
 
         return new AssistantResponseCreated(
             input.ConversationId,
-            builder.ToString(),
+            EnforceResponseMode(builder.ToString()),
             ProposedActions: [],
             DateTimeOffset.UtcNow);
     }
