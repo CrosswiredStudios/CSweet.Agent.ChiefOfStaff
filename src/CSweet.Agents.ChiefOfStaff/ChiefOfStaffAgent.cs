@@ -601,16 +601,14 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             $"resource-change:{request.Id:N}:manager-brief",
             context,
             cancellationToken);
-        var top = actionableRecommendations
-            .OrderBy(x => x.Delta.Role.Priority)
-            .ThenBy(x => x.Delta.Role.Title, StringComparer.Ordinal)
-            .FirstOrDefault();
-        if (top != default)
+        foreach (var actionable in actionableRecommendations
+                     .OrderBy(x => x.Delta.Role.Priority)
+                     .ThenBy(x => x.Delta.Role.Title, StringComparer.Ordinal))
         {
             await SuggestMarketplaceActionAsync(
                 messageId,
-                top.Delta.Role.Title,
-                $"resource-change:{request.Id:N}:action:{top.Recommendation.Id:N}",
+                actionable.Delta.Role.Title,
+                $"resource-change:{request.Id:N}:action:{actionable.Recommendation.Id:N}",
                 context,
                 cancellationToken);
         }

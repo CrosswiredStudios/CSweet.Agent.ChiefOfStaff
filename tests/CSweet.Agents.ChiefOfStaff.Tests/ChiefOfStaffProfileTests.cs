@@ -107,7 +107,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("highest-priority new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -317,7 +317,7 @@ public sealed class ChiefOfStaffProfileTests
             DateTimeOffset.UtcNow);
         var upserts = new List<UpsertHiringRecommendationRequest>();
         SendCommunicationMessageRequest? managerMessage = null;
-        SuggestUserActionRequest? suggestedAction = null;
+        var suggestedActions = new List<SuggestUserActionRequest>();
         var runtime = new AgentTestRuntime()
             .RegisterCapability<JsonElement, OrganizationSnapshotResponse>(
                 PlatformCapabilities.OrganizationSnapshotRead,
@@ -387,7 +387,7 @@ public sealed class ChiefOfStaffProfileTests
                 ChiefOfStaffProfile.SuggestUserActionCapability,
                 (input, _) =>
                 {
-                    suggestedAction = input;
+                    suggestedActions.Add(input);
                     return Task.FromResult(JsonSerializer.SerializeToElement(new { accepted = true }));
                 });
         var context = runtime.CreateContext(
@@ -436,9 +436,14 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
         Assert.Contains("QA / Playtester", managerMessage.Content, StringComparison.Ordinal);
         Assert.Contains("candidate-free hiring suggestions", managerMessage.Content, StringComparison.OrdinalIgnoreCase);
-        Assert.NotNull(suggestedAction);
-        Assert.Equal(messageId, suggestedAction.MessageId);
-        Assert.Equal("Lead Web3D Developer", suggestedAction.Parameters.GetProperty("role").GetString());
+        Assert.Equal(2, suggestedActions.Count);
+        Assert.All(suggestedActions, action => Assert.Equal(messageId, action.MessageId));
+        Assert.Equal(
+            ["Lead Web3D Developer", "QA / Playtester"],
+            suggestedActions
+                .Select(action => action.Parameters.GetProperty("role").GetString())
+                .ToArray());
+        Assert.Equal(2, suggestedActions.Select(action => action.IdempotencyKey).Distinct().Count());
     }
 
     [Fact]

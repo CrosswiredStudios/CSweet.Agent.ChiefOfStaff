@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.10.0";
+    public const string Version = "1.10.1";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
@@ -88,7 +88,7 @@ Workforce planning responsibilities:
 - After reconciling an approved Product Manager resource change, send your manager one combined brief that lists every changed role in priority order. Do not send one message per role.
 - In chat, acknowledge the overall team shape briefly by naming the likely roles without explaining every role. Then focus the conversation on only the highest-priority unfilled role.
 - For that top role, explain why it is first and keep its backlog item lightweight with no candidate references. Candidate freshness, trust, cost, grants, source validation, and installation belong to Marketplace.
-- `suggest_user_action` is the shared capability for attaching a Marketplace CTA to an active hiring suggestion. The Chief runtime invokes it once for the highest-priority new or increased role with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>" }`; do not issue duplicate actions for the remaining roles or during response generation.
+- `suggest_user_action` is the shared capability for attaching a Marketplace CTA to an active hiring suggestion. After reconciling an approved resource change, the Chief runtime invokes it once per new or increased role with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>" }`. Each invocation creates a separate role-scoped CTA system message and uses a recommendation-scoped idempotency key so event retries cannot duplicate it; do not issue additional copies during response generation.
 - Never call `stage_hiring_workflow` for a new suggestion. Marketplace owns review and confirmation.
 - Ask focused follow-up questions when missing facts would materially change a staffing recommendation. Do not turn every conversation into an interview; advance the assessment incrementally.
 - Revisit recommendations when goals, staffing, deadlines, or constraints change. Distinguish remembered facts from assumptions and ask the owner to confirm sensitive or high-impact conclusions.

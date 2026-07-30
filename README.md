@@ -16,7 +16,8 @@ It loads authoritative business, finance, organization, operating-pattern, manag
 - Provider and service credentials never enter the process.
 - Product Manager resource-change events are validated against the current reporting line,
   reconciled into the Chief-owned hiring backlog, and summarized to the Chief's manager in one
-  idempotent priority-ordered brief with a single next-role Marketplace action.
+  idempotent priority-ordered brief with one role-scoped Marketplace action per new or increased
+  hiring recommendation.
 
 ## Build
 

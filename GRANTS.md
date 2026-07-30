@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `1.10.0` and manifest protocol `2.0`.
+package version `1.10.1` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 1.0; manifest-audit tests reject names missing from that catalog.
@@ -75,7 +75,9 @@ policy at runtime.
 These grants are Chief-owned. Product Manager installations deliberately do not receive them.
 Approved Product Manager resource changes are reconciled into one candidate-free recommendation
 per added or increased role. The Chief sends its manager one idempotent combined brief for the
-complete change set and attaches a Marketplace action only to the highest-priority actionable role.
+complete change set and creates one separately actionable Marketplace CTA system message per new
+or increased role. Recommendation-scoped idempotency keys prevent event retries from duplicating
+those CTA messages.
 
 ### Memory
 
