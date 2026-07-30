@@ -586,7 +586,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     Priority = Math.Max(1, delta.Role.Priority),
                     RoleKey = stableRoleKey,
                     Headcount = delta.Role.Headcount,
-                    SourceResourceChangeRequestId = request.Id
+                    SourceResourceChangeRequestId = request.Id,
+                    TeamId = request.TeamId
                 },
                 cancellationToken);
 
