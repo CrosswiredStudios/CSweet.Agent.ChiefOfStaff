@@ -22,24 +22,6 @@ internal sealed record CommunicationHubActionResponse(
     string Message,
     CommunicationChatResponse? Chat = null);
 
-public sealed record EmployeeHiredEvent(
-    Guid OrganizationId,
-    Guid OrganizationUserId,
-    string EmployeeType,
-    Guid? RoleId,
-    string? RoleTitle,
-    Guid? AgentInstallationId,
-    Guid? WorkerId,
-    Guid? ReportsToOrganizationUserId,
-    Guid? HiringOrganizationUserId,
-    string Source,
-    DateTimeOffset OccurredAt);
-
-public sealed record ResolveHiringRecommendationRequest(
-    Guid RecommendationId,
-    Guid ResultOrganizationUserId,
-    string IdempotencyKey);
-
 public sealed record SuggestUserActionRequest(
     Guid? MessageId,
     Guid? ChatTurnId,

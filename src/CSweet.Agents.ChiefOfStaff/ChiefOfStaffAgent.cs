@@ -106,9 +106,9 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
-        if (string.Equals(message.EventType, ChiefOfStaffProfile.EmployeeHiredEvent, StringComparison.Ordinal))
+        if (string.Equals(message.EventType, ChiefOfStaffProfile.RecommendationFulfilledEvent, StringComparison.Ordinal))
         {
-            await HandleEmployeeHiredAsync(message, context, cancellationToken);
+            await HandleRecommendationFulfilledAsync(message, context, cancellationToken);
             return;
         }
 
@@ -466,8 +466,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             $"agent-onboarded:{eventId:N}",
             context,
             cancellationToken);
-        await ReconcileApprovedResourceChangesAsync(context, cancellationToken);
-
         _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
             message,
             cancellationToken);
@@ -535,18 +533,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
     }
 
-    private async Task ReconcileApprovedResourceChangesAsync(
-        AgentRuntimeContext context,
-        CancellationToken cancellationToken)
-    {
-        await RequireActiveChiefAsync(context, cancellationToken);
-        var read = await context.Platform.ReadResourceChangesAsync(
-            new ResourceChangeReadRequest(Statuses: ["Approved"]),
-            cancellationToken);
-        foreach (var request in read.Requests.OrderBy(x => x.DecidedAt))
-            await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
-    }
-
     private async Task ReconcileApprovedResourceChangeAsync(
         ResourceChangeRequestResponse request,
         AgentRuntimeContext context,
@@ -575,6 +561,14 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 continue;
             }
 
+            if (delta.ChangeKind is not ("Add" or "Increase"))
+                continue;
+            var requestedHeadcount = delta.ChangeKind == "Increase"
+                ? delta.Role.Headcount - (delta.PreviousRole?.Headcount ?? 0)
+                : delta.Role.Headcount;
+            if (requestedHeadcount <= 0)
+                continue;
+
             var recommendation = await context.Platform.UpsertHiringRecommendationAsync(
                 new UpsertHiringRecommendationRequest(
                     delta.Role.Title,
@@ -582,18 +576,17 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     null,
                     [],
                     null,
-                    $"resource-role:{request.RequesterOrganizationUserId:N}:{NormalizeKey(delta.Role.RoleKey)}")
+                    $"resource-change:{request.Id:N}:role:{NormalizeKey(delta.Role.RoleKey)}")
                 {
                     Priority = Math.Max(1, delta.Role.Priority),
                     RoleKey = stableRoleKey,
-                    Headcount = delta.Role.Headcount,
+                    Headcount = requestedHeadcount,
                     SourceResourceChangeRequestId = request.Id,
                     TeamId = request.TeamId
                 },
                 cancellationToken);
 
-            if (delta.ChangeKind is "Add" or "Increase")
-                actionableRecommendations.Add((delta, recommendation));
+            actionableRecommendations.Add((delta, recommendation));
         }
 
         if (request.Deltas.Count == 0) return;
@@ -610,6 +603,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             await SuggestMarketplaceActionAsync(
                 messageId,
                 actionable.Delta.Role.Title,
+                actionable.Recommendation.Id,
                 $"resource-change:{request.Id:N}:action:{actionable.Recommendation.Id:N}",
                 context,
                 cancellationToken);
@@ -707,52 +701,39 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             : throw new InvalidOperationException($"The Chief could not open its manager chat: {created.Message}");
     }
 
-    private async Task HandleEmployeeHiredAsync(
+    private async Task HandleRecommendationFulfilledAsync(
         AgentEventEnvelope message,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        var hired = DeserializePayload<EmployeeHiredEvent>(message.Payload);
-        if (hired is null ||
-            hired.OrganizationId == Guid.Empty ||
-            hired.OrganizationUserId == Guid.Empty ||
-            string.IsNullOrWhiteSpace(hired.RoleTitle) ||
-            !string.Equals(context.BusinessId, hired.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
+        var fulfilled = DeserializePayload<HiringRecommendationFulfilledEvent>(message.Payload);
+        if (fulfilled is null ||
+            fulfilled.OrganizationId == Guid.Empty ||
+            fulfilled.RecommendationId == Guid.Empty ||
+            fulfilled.RequestingInstallationId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(fulfilled.RoleTitle) ||
+            fulfilled.FulfilledHeadcount < fulfilled.RequestedHeadcount ||
+            !Guid.TryParse(context.InstallationId, out var installationId) ||
+            fulfilled.RequestingInstallationId != installationId ||
+            !string.Equals(context.BusinessId, fulfilled.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogWarning("Ignored malformed employee hired event {EventId}.", message.EventId);
+            _logger.LogWarning("Ignored unrelated or malformed hiring recommendation fulfillment event {EventId}.", message.EventId);
             return;
         }
 
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
-        var hiredRole = NormalizeRoleIdentity(hired.RoleTitle);
-        var matches = backlog.Recommendations
-            .Where(x => string.Equals(NormalizeRoleIdentity(x.Title), hiredRole, StringComparison.Ordinal))
-            .ToList();
-        if (matches.Count != 1)
-        {
-            if (matches.Count > 1)
-                _logger.LogWarning(
-                    "Employee hired event {EventId} matched {Count} Chief suggestions for role {Role}; no suggestion was resolved.",
-                    message.EventId,
-                    matches.Count,
-                    hired.RoleTitle);
-            return;
-        }
-
-        var matched = matches[0];
         var next = backlog.Recommendations
-            .Where(x => x.Id != matched.Id)
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.CreatedAt)
             .FirstOrDefault();
         var ownerChat = await FindOwnerChatAsync(context, cancellationToken);
         var content = next is null
-            ? $"{hired.RoleTitle} is now hired. Your current hiring backlog is complete."
-            : $"{hired.RoleTitle} is now hired. The next priority is **{next.Title}**: {next.Objective}";
+            ? $"The {fulfilled.RoleTitle} recommendation is fulfilled ({fulfilled.FulfilledHeadcount}/{fulfilled.RequestedHeadcount}). Your current hiring backlog is complete."
+            : $"The {fulfilled.RoleTitle} recommendation is fulfilled ({fulfilled.FulfilledHeadcount}/{fulfilled.RequestedHeadcount}). The next priority is **{next.Title}**: {next.Objective}";
         var sentMessageId = await SendCommunicationMessageAsync(
             ownerChat.Id,
             content,
-            $"employee-hired:{message.EventId}:next",
+            $"hiring-recommendation-fulfilled:{message.EventId}:next",
             context,
             cancellationToken);
         if (next is not null)
@@ -760,17 +741,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             await SuggestMarketplaceActionAsync(
                 sentMessageId,
                 next.Title,
-                $"employee-hired:{message.EventId}:action:{next.Id:N}",
+                next.Id,
+                $"hiring-recommendation-fulfilled:{message.EventId}:action:{next.Id:N}",
                 context,
                 cancellationToken);
         }
-        _ = await context.Platform.InvokeAsync<ResolveHiringRecommendationRequest, JsonElement>(
-            ChiefOfStaffProfile.ResolveHiringRecommendationCapability,
-            new ResolveHiringRecommendationRequest(
-                matched.Id,
-                hired.OrganizationUserId,
-                $"employee-hired:{message.EventId}:resolve:{matched.Id:N}"),
-            cancellationToken);
     }
 
     private async Task AttachTopHiringActionAsync(
@@ -788,6 +763,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         await SuggestMarketplaceActionAsync(
             messageId,
             next.Title,
+            next.Id,
             $"{idempotencyPrefix}:action:{next.Id:N}",
             context,
             cancellationToken);
@@ -818,7 +794,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 ChiefOfStaffProfile.HiringMarketplaceBrowseWorkflow,
                 "Browse candidates",
                 $"Review Marketplace candidates for the {next.Title} role.",
-                JsonSerializer.SerializeToElement(new { role = next.Title }),
+                JsonSerializer.SerializeToElement(new { role = next.Title, recommendationId = next.Id }),
                 $"{idempotencyPrefix}:action:{next.Id:N}"),
             cancellationToken);
     }
@@ -826,6 +802,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     private static async Task SuggestMarketplaceActionAsync(
         Guid messageId,
         string role,
+        Guid recommendationId,
         string idempotencyKey,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
@@ -838,7 +815,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                 ChiefOfStaffProfile.HiringMarketplaceBrowseWorkflow,
                 "Browse candidates",
                 $"Review Marketplace candidates for the {role} role.",
-                JsonSerializer.SerializeToElement(new { role }),
+                JsonSerializer.SerializeToElement(new { role, recommendationId }),
                 idempotencyKey),
             cancellationToken);
     }

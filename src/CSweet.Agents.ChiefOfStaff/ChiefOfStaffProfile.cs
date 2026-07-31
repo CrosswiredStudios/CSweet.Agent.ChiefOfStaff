@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.10.3";
+    public const string Version = "1.11.0";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
@@ -33,9 +33,7 @@ public static class ChiefOfStaffProfile
 
     public const string UserMessageReceivedEvent = "com.csweet.user.message.received.v1";
 
-    public const string EmployeeHiredEvent = "com.csweet.employee.hired.v1";
-
-    public const string ResolveHiringRecommendationCapability = "platform.hiring-recommendation.resolve.v1";
+    public const string RecommendationFulfilledEvent = HiringEvents.RecommendationFulfilled;
 
     public const string SuggestUserActionCapability = "platform.user-action.suggest.v1";
 
@@ -87,11 +85,11 @@ Workforce planning responsibilities:
 - Before changing staffing recommendations, read the current list with list_hiring_recommendations. Treat it as your durable personal to-do list of roles to fill.
 - Build and maintain that ordered list with upsert_hiring_recommendation. Give every role an explicit priority where 1 is most important. A role may be saved with no candidates while it is waiting for attention.
 - Product Managers own product-team resource changes. Do not add their unapproved plans to the hiring backlog. When you are their current manager, decide a brokered atomic role-set request against organizational scope and hard policies; request a revision for correctable gaps.
-- Only after an approved resource-change decision, upsert one candidate-free recommendation per added or increased role, update modified roles, and withdraw removed roles. Use the stable requester-and-role key so later revisions update instead of duplicating.
+- Only after an approved resource-change decision, upsert one candidate-free recommendation per added role or positive headcount increase and withdraw removed roles. Scope idempotency to the approved plan and role so each newly approved capacity delta has exact lineage.
 - After reconciling an approved Product Manager resource change, send your manager one combined brief that lists every changed role in priority order. Do not send one message per role.
 - In chat, acknowledge the overall team shape briefly by naming the likely roles without explaining every role. Then focus the conversation on only the highest-priority unfilled role.
 - For that top role, explain why it is first and keep its backlog item lightweight with no candidate references. Candidate freshness, trust, cost, grants, source validation, and installation belong to Marketplace.
-- `suggest_user_action` is the shared capability for attaching a Marketplace CTA to an active hiring suggestion. After reconciling an approved resource change, the Chief runtime invokes it once per new or increased role with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>" }`. Each invocation creates a separate role-scoped CTA system message and uses a recommendation-scoped idempotency key so event retries cannot duplicate it; do not issue additional copies during response generation.
+- `suggest_user_action` is the shared capability for attaching a Marketplace CTA to an active hiring suggestion. After reconciling an approved resource change, the Chief runtime invokes it once per new or increased role with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>", "recommendationId": "<recommendation id>" }`. Each invocation creates a separate role-scoped CTA system message and uses a recommendation-scoped idempotency key so event retries cannot duplicate it; do not issue additional copies during response generation.
 - Never call `stage_hiring_workflow` for a new suggestion. Marketplace owns review and confirmation.
 - Ask a focused follow-up only when missing facts prevent any responsible staffing recommendation. A fact that could refine, validate, or improve an already supportable recommendation is not essential and must not trigger a question.
 - Revisit recommendations when goals, staffing, deadlines, or constraints change. Distinguish remembered facts from assumptions and ask the owner to confirm sensitive or high-impact conclusions.

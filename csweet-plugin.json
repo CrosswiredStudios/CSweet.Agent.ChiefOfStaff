@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.10.3",
+  "version": "1.11.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -54,7 +54,6 @@
     { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Manager direct reports" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
-    ,{ "name": "platform.hiring-recommendation.resolve.v1", "scope": "organization", "purpose": "Resolve this Chief of Staff installation's role suggestions after a matching hire" }
     ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision" }
     ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
     ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
@@ -74,7 +73,7 @@
       "com.csweet.management.resource-change.decided.v1",
       "com.csweet.workstream.changed.v1",
       "com.csweet.workforce-plan.decided.v1",
-      "com.csweet.employee.hired.v1"
+      "com.csweet.hiring-recommendation.fulfilled.v1"
     ]
   },
   "configuration": [

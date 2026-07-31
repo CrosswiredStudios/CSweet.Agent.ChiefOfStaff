@@ -65,12 +65,7 @@ public sealed class ChiefOfStaffProfileTests
         var subscriptions = manifest.RootElement.GetProperty("events").GetProperty("subscribes")
             .EnumerateArray().Select(x => x.GetString()).ToList();
 
-        var extensionCapabilities = new[]
-        {
-            ChiefOfStaffProfile.ResolveHiringRecommendationCapability,
-            ChiefOfStaffProfile.SuggestUserActionCapability
-        };
-        Assert.All(provides.Concat(requires).Except(extensionCapabilities), capability =>
+        Assert.All(provides.Concat(requires), capability =>
             Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
         Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
@@ -83,10 +78,9 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(PlatformCapabilities.UserInputRequest, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
-        Assert.Contains(ChiefOfStaffProfile.ResolveHiringRecommendationCapability, requires);
         Assert.Contains(ChiefOfStaffProfile.SuggestUserActionCapability, requires);
         Assert.DoesNotContain(PlatformCapabilities.HiringWorkflowStage, requires);
-        Assert.Contains(ChiefOfStaffProfile.EmployeeHiredEvent, subscriptions);
+        Assert.Contains(ChiefOfStaffProfile.RecommendationFulfilledEvent, subscriptions);
         Assert.Contains(ProductManagementCapabilities.RoleBrief, provides);
         Assert.Contains(ProductManagementCapabilities.PlanReview, provides);
         Assert.Contains(ProductManagementCapabilities.Escalation, provides);
@@ -385,7 +379,10 @@ What type of business are you building?
             "The approved team covers product delivery and independent quality.",
             1,
             roles,
-            roles.Select(role => new ResourceChangeRoleDelta("Add", role, null)).ToList(),
+            [
+                new ResourceChangeRoleDelta("Add", roles[0], null),
+                new ResourceChangeRoleDelta("Increase", roles[1] with { Headcount = 3 }, roles[1])
+            ],
             [],
             [],
             null,
@@ -526,7 +523,9 @@ What type of business are you building?
             Assert.Null(upsert.RecommendedCandidateReference);
             Assert.Equal(requestId, upsert.SourceResourceChangeRequestId);
             Assert.StartsWith($"{productManagerId:N}:", upsert.RoleKey, StringComparison.Ordinal);
+            Assert.StartsWith($"resource-change:{requestId:N}:role:", upsert.IdempotencyKey, StringComparison.Ordinal);
         });
+        Assert.Equal([1, 2], upserts.Select(upsert => upsert.Headcount).ToArray());
         Assert.NotNull(managerMessage);
         Assert.Equal(managerChatId, managerMessage.ChatId);
         Assert.Contains("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
@@ -534,12 +533,108 @@ What type of business are you building?
         Assert.Contains("candidate-free hiring suggestions", managerMessage.Content, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, suggestedActions.Count);
         Assert.All(suggestedActions, action => Assert.Equal(messageId, action.MessageId));
+        Assert.All(suggestedActions, action =>
+            Assert.True(action.Parameters.GetProperty("recommendationId").TryGetGuid(out _)));
         Assert.Equal(
             ["Lead Web3D Developer", "QA / Playtester"],
             suggestedActions
-                .Select(action => action.Parameters.GetProperty("role").GetString())
+                .Select(action => action.Parameters.GetProperty("role").GetString()!)
                 .ToArray());
         Assert.Equal(2, suggestedActions.Select(action => action.IdempotencyKey).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task RecommendationFulfilled_AcknowledgesExactEventAndAdvancesToNextSuggestion()
+    {
+        var organizationId = Guid.NewGuid();
+        var installationId = Guid.NewGuid();
+        var chiefId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var ownerChatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var next = new HiringRecommendationResponse(
+            Guid.NewGuid(),
+            null,
+            "QA / Playtester",
+            "Protect release quality.",
+            "Suggested",
+            null,
+            [],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow)
+        {
+            Priority = 2,
+            RoleKey = "quality",
+            Headcount = 1
+        };
+        SendCommunicationMessageRequest? sent = null;
+        SuggestUserActionRequest? suggested = null;
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<JsonElement, HiringBacklogResponse>(
+                PlatformCapabilities.HiringRecommendationList,
+                (_, _) => Task.FromResult(new HiringBacklogResponse([next])))
+            .RegisterCapability<JsonElement, CommunicationHubResponse>(
+                ChiefOfStaffProfile.ReadCommunicationCapability,
+                (_, _) => Task.FromResult(new CommunicationHubResponse(
+                    chiefId,
+                    true,
+                    [new CommunicationChatResponse(
+                        ownerChatId,
+                        string.Empty,
+                        null,
+                        true,
+                        true,
+                        true,
+                        true,
+                        DateTimeOffset.UtcNow,
+                        [
+                            new CommunicationParticipantResponse(chiefId, "Chief", "Agent", "Chief of Staff"),
+                            new CommunicationParticipantResponse(ownerId, "Owner", "Human", "CEO")
+                        ],
+                        null,
+                        null,
+                        0)],
+                    [],
+                    [])))
+            .RegisterCapability<SendCommunicationMessageRequest, JsonElement>(
+                ChiefOfStaffProfile.SendCommunicationMessageCapability,
+                (request, _) =>
+                {
+                    sent = request;
+                    return Task.FromResult(JsonSerializer.SerializeToElement(new { id = messageId }));
+                })
+            .RegisterCapability<SuggestUserActionRequest, JsonElement>(
+                ChiefOfStaffProfile.SuggestUserActionCapability,
+                (request, _) =>
+                {
+                    suggested = request;
+                    return Task.FromResult(JsonSerializer.SerializeToElement(new { accepted = true }));
+                });
+        var context = runtime.CreateContext(
+            organizationId.ToString("D"),
+            installationId.ToString("D"),
+            new AgentIdentity(
+                chiefId.ToString("D"), "Chief", null, "Chief of Staff", null, [], null,
+                ownerId.ToString("D"), "Owner"));
+        var agent = new ChiefOfStaffAgent(
+            NullLogger<ChiefOfStaffAgent>.Instance,
+            new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+        await agent.HandleEventAsync(
+            FulfilledEvent(organizationId, Guid.NewGuid(), "Lead Web3D Developer"),
+            context,
+            CancellationToken.None);
+        Assert.Null(sent);
+
+        var fulfilled = FulfilledEvent(organizationId, installationId, "Lead Web3D Developer");
+        await agent.HandleEventAsync(fulfilled, context, CancellationToken.None);
+
+        Assert.NotNull(sent);
+        Assert.Contains("Lead Web3D Developer", sent.Content, StringComparison.Ordinal);
+        Assert.Contains(next.Title, sent.Content, StringComparison.Ordinal);
+        Assert.NotNull(suggested);
+        Assert.Equal(next.Id, suggested.Parameters.GetProperty("recommendationId").GetGuid());
+        Assert.Equal(next.Title, suggested.Parameters.GetProperty("role").GetString());
     }
 
     [Fact]
@@ -587,6 +682,32 @@ What type of business are you building?
             false,
             Guid.NewGuid(),
             null);
+
+    private static AgentEventEnvelope FulfilledEvent(
+        Guid organizationId,
+        Guid requestingInstallationId,
+        string roleTitle)
+    {
+        var occurredAt = DateTimeOffset.UtcNow;
+        return new AgentEventEnvelope(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            HiringEvents.RecommendationFulfilled,
+            JsonSerializer.SerializeToElement(new HiringRecommendationFulfilledEvent(
+                organizationId,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                requestingInstallationId,
+                "web3d",
+                roleTitle,
+                Guid.NewGuid(),
+                null,
+                1,
+                1,
+                [Guid.NewGuid()],
+                occurredAt)),
+            occurredAt);
+    }
 
     private static ResourceChangeRequestResponse ResourceChange(params ResourceChangeRoleDelta[] deltas)
     {
