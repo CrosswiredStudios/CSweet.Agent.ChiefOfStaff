@@ -545,7 +545,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             new List<(ResourceChangeRoleDelta Delta, HiringRecommendationResponse Recommendation)>();
         foreach (var delta in request.Deltas.OrderBy(x => x.Role.Priority))
         {
-            var stableRoleKey = $"{request.RequesterOrganizationUserId:N}:{delta.Role.RoleKey}";
+            var stableRoleKey = delta.Role.RoleKey;
             if (delta.ChangeKind.Equals("Remove", StringComparison.OrdinalIgnoreCase))
             {
                 foreach (var existing in backlog.Recommendations.Where(x =>

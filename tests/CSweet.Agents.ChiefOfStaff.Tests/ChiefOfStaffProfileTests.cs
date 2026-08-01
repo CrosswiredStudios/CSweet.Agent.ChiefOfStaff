@@ -522,7 +522,7 @@ What type of business are you building?
             Assert.Empty(upsert.CandidateReferences);
             Assert.Null(upsert.RecommendedCandidateReference);
             Assert.Equal(requestId, upsert.SourceResourceChangeRequestId);
-            Assert.StartsWith($"{productManagerId:N}:", upsert.RoleKey, StringComparison.Ordinal);
+            Assert.Contains(upsert.RoleKey, roles.Select(role => role.RoleKey));
             Assert.StartsWith($"resource-change:{requestId:N}:role:", upsert.IdempotencyKey, StringComparison.Ordinal);
         });
         Assert.Equal([1, 2], upserts.Select(upsert => upsert.Headcount).ToArray());
