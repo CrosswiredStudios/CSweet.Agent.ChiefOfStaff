@@ -84,5 +84,15 @@
   "webAccess": { "mode": "None", "rules": [] },
   "ui": [
     { "kind": "form", "id": "chief-of-staff-settings", "title": "Chief of Staff settings", "capability": "agent.configuration.update.v1" }
-  ]
+  ],
+  "catalog": {
+    "summary": "Turns executive direction into coordinated priorities, staffing plans, decisions, and follow-through across the company.",
+    "category": "Leadership",
+    "role": { "key": "chief-of-staff", "name": "Chief of Staff" },
+    "license": { "spdxId": "LicenseRef-Proprietary" },
+    "iconUrls": [],
+    "roleAliases": ["Executive Operations Lead", "Operations Executive"],
+    "keywords": ["leadership", "organization", "workforce", "executive operations"],
+    "documentationUrl": "README.md"
+  }
 }
