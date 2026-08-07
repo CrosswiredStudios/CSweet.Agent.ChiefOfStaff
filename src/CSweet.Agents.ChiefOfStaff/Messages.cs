@@ -47,7 +47,8 @@ public sealed record AssistantCapabilityInput(
     string Prompt,
     IReadOnlyDictionary<string, string>? Context,
     string? UserId = null,
-    Guid MessageId = default);
+    Guid MessageId = default,
+    Guid ChatTurnId = default);
 
 public sealed record AssistantResponseCreated(
     string ConversationId,

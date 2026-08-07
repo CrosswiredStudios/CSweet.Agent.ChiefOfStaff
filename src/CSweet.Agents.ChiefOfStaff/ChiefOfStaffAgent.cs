@@ -193,7 +193,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
                     incoming.Message,
                     incoming.Context,
                     incoming.UserId,
-                    incoming.MessageId),
+                    incoming.MessageId,
+                    incoming.TurnId),
                 ChiefOfStaffProfile.ConverseCapability,
                 context,
                 operatingContext: null,
@@ -1098,15 +1099,30 @@ Use exactly one path: recommendation or clarification. If you identify a first h
             input.ProviderProfileId,
             input.ConversationId);
 
+        operatingContext ??= await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
+        var conversationId = Guid.TryParse(input.ConversationId, out var parsedConversationId)
+            ? parsedConversationId
+            : (Guid?)null;
+        var invocation = new AgentLlmInvocationContext(
+            conversationId,
+            input.ChatTurnId == Guid.Empty ? null : input.ChatTurnId,
+            "primary");
         var selection = new AgentLlmSelection(
             input.ProviderProfileId,
-            Settings.GetString("llmModel"));
+            Settings.GetString("llmModel"),
+            invocation);
+        var extractionSelection = selection with
+        {
+            Invocation = invocation with { InvocationKind = "business-fact-extraction" }
+        };
+        var extractionChatClient = _llmClientFactory is null
+            ? new PlatformChatClient(runtimeContext.Platform, extractionSelection)
+            : await _llmClientFactory.CreateChatClientAsync(extractionSelection, cancellationToken);
+        await _orchestrator.CaptureExplicitFactsAsync(
+            extractionChatClient, input, operatingContext, runtimeContext, cancellationToken);
         var chatClient = _llmClientFactory is null
             ? new PlatformChatClient(runtimeContext.Platform, selection)
             : await _llmClientFactory.CreateChatClientAsync(selection, cancellationToken);
-
-        operatingContext ??= await _orchestrator.AssembleContextAsync(runtimeContext, cancellationToken);
-        await _orchestrator.CaptureExplicitFactsAsync(chatClient, input, operatingContext, runtimeContext, cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff created chat client for provider {ProviderProfileId} and conversation {ConversationId}.",
@@ -1146,6 +1162,7 @@ Use exactly one path: recommendation or clarification. If you identify a first h
                 "Consult the active Product Manager direct report for product strategy, discovery, roadmap, requirements, priorities, or product-team design."));
         }
 
+        var useAgentMemory = input.ChatTurnId == Guid.Empty;
         AIAgent agent = new ChatClientAgent(
             chatClient,
             new ChatClientAgentOptions
@@ -1157,29 +1174,32 @@ Use exactly one path: recommendation or clarification. If you identify a first h
                     Instructions = ChiefOfStaffProfile.SystemPrompt,
                     Tools = tools
                 },
-                AIContextProviders = [memoryProvider]
+                AIContextProviders = useAgentMemory ? [memoryProvider] : []
             });
 
         var prompt = _orchestrator.BuildGroundedPrompt(input.Prompt, capability, operatingContext, Settings);
 
         AgentSession session = await agent.CreateSessionAsync(cancellationToken);
-        session.ConfigureMemory(
-            new MemoryPartition(
-                runtimeContext.BusinessId,
-                runtimeContext.InstallationId,
-                ChiefOfStaffProfile.AgentId,
-                input.UserId ?? ResolveUserId(input.Context),
-                input.ConversationId),
-            MemoryScope.User,
-            new MemoryPrincipal(
-                runtimeContext.BusinessId,
-                ChiefOfStaffProfile.AgentId,
-                ChiefOfStaffProfile.AgentId,
-                runtimeContext.InstallationId,
-                Attributes: new Dictionary<string, string>
-                {
-                    ["memory.maxSensitivity"] = MemorySensitivity.Personal.ToString()
-                }));
+        if (useAgentMemory)
+        {
+            session.ConfigureMemory(
+                new MemoryPartition(
+                    runtimeContext.BusinessId,
+                    runtimeContext.InstallationId,
+                    ChiefOfStaffProfile.AgentId,
+                    input.UserId ?? ResolveUserId(input.Context),
+                    input.ConversationId),
+                MemoryScope.User,
+                new MemoryPrincipal(
+                    runtimeContext.BusinessId,
+                    ChiefOfStaffProfile.AgentId,
+                    ChiefOfStaffProfile.AgentId,
+                    runtimeContext.InstallationId,
+                    Attributes: new Dictionary<string, string>
+                    {
+                        ["memory.maxSensitivity"] = MemorySensitivity.Personal.ToString()
+                    }));
+        }
 
         _logger.LogInformation(
             "Chief of Staff starting MAF streaming for conversation {ConversationId}. Capability {Capability}. PromptLength {PromptLength}.",
