@@ -3,10 +3,10 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `1.11.1` and manifest protocol `2.0`.
+package version `1.12.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
-`CSweet.Agent.SDK` 3.2.0; manifest-audit tests reject names missing from that catalog.
+`CSweet.Agent.SDK` 3.3.0; manifest-audit tests reject names missing from that catalog.
 
 ## How to read this catalog
 
@@ -117,8 +117,6 @@ and reporting relationship rather than trusting caller-supplied identity.
 | `assistant.summarize-activity.v1` | C-Sweet | Summarize current operating activity. |
 | `assistant.plan-work.v1` | C-Sweet | Produce an executive work plan. |
 | `management.check-in.v1` | C-Sweet management cycle | Return a management status report. |
-| `agent.configuration.describe.v1` | C-Sweet | Describe configurable settings. |
-| `agent.configuration.update.v1` | C-Sweet | Validate and apply configurable settings. |
 
 ### Product leadership coordination
 

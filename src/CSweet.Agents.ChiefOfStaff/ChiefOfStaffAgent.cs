@@ -530,8 +530,13 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
         var request = read.Requests.SingleOrDefault(x =>
             x.Id == resourceEvent.RequestId &&
             x.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase));
-        if (request is not null)
-            await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
+        if (request is null)
+        {
+            throw new InvalidOperationException(
+                $"Approved resource change {resourceEvent.RequestId:D} was delivered to the Chief of Staff but is not visible through its granted organization resource-change capability.");
+        }
+
+        await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
     }
 
     private async Task ReconcileApprovedResourceChangeAsync(
@@ -658,12 +663,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             x.AgentInstallationId == installationId &&
             x.IsActive)
             ?? throw new InvalidOperationException("This installation is not the active Chief of Staff.");
-        var roleName = self.RoleId.HasValue
-            ? organization.Roles.SingleOrDefault(x => x.Id == self.RoleId.Value)?.Name
-            : null;
-        if (!self.DisplayName.Contains("Chief of Staff", StringComparison.OrdinalIgnoreCase) &&
-            !(roleName?.Contains("Chief of Staff", StringComparison.OrdinalIgnoreCase) ?? false))
-            throw new InvalidOperationException("This installation is not assigned the Chief of Staff role.");
         return (installationId, self, organization);
     }
 

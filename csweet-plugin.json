@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -21,9 +21,7 @@
     { "name": "management.check-in.v1", "description": "Run an executive check-in.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
     { "name": "management.product-role-brief.v1", "description": "Produce an authoritative Product Manager role brief.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
     { "name": "management.product-plan.review.v1", "description": "Review a Product Manager plan.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.product-escalation.v1", "description": "Escalate a Product Manager decision to the owner.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
-    { "name": "agent.configuration.describe.v1", "description": "Describe Chief of Staff configuration.", "inputSchema": { "type": "object", "additionalProperties": false }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" },
-    { "name": "agent.configuration.update.v1", "description": "Update Chief of Staff configuration.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
+    { "name": "management.product-escalation.v1", "description": "Escalate a Product Manager decision to the owner.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" }
   ],
   "requires": [
     { "name": "platform.user-input.request.v1", "scope": "organization", "purpose": "Ask the owner a bounded structured question" },
@@ -78,13 +76,18 @@
   },
   "configuration": [
     { "key": "llmProviderId", "type": "provider", "label": "LLM provider", "required": true, "secret": false },
-    { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false }
+    { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false, "dependsOnFieldKey": "llmProviderId" },
+    { "key": "responseTone", "type": "select", "label": "Response tone", "required": true, "secret": false, "defaultValue": "concise", "options": [
+      { "value": "concise", "label": "Concise" },
+      { "value": "balanced", "label": "Balanced" },
+      { "value": "detailed", "label": "Detailed" }
+    ] },
+    { "key": "proactivePlanning", "type": "boolean", "label": "Proactive planning", "required": true, "secret": false, "defaultValue": true },
+    { "key": "maxPlanItems", "type": "number", "label": "Maximum plan items", "required": true, "secret": false, "defaultValue": 10, "minimum": 3, "maximum": 20, "step": 1 }
   ],
   "credentials": [],
   "webAccess": { "mode": "None", "rules": [] },
-  "ui": [
-    { "kind": "form", "id": "chief-of-staff-settings", "title": "Chief of Staff settings", "capability": "agent.configuration.update.v1" }
-  ],
+  "ui": [],
   "catalog": {
     "summary": "Turns executive direction into coordinated priorities, staffing plans, decisions, and follow-through across the company.",
     "category": "Leadership",

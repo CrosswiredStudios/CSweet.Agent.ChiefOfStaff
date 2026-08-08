@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "1.11.1";
+    public const string Version = "1.12.0";
 
     public const string DefaultDisplayName = "C-Sweet Chief of Staff";
 
@@ -20,7 +20,7 @@ public static class ChiefOfStaffProfile
 
     public const string ManagementCheckInCapability = ManagementCapabilities.CheckIn;
 
-    public const string ConfigurationSchemaVersion = "1.0";
+    public const string ConfigurationSchemaVersion = "1.1";
 
     public const string OnboardedEvent = AgentLifecycleEvents.Onboarded;
 

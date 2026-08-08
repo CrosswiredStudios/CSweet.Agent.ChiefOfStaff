@@ -68,8 +68,11 @@ public sealed class ChiefOfStaffProfileTests
         Assert.All(provides.Concat(requires), capability =>
             Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
-        Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
-        Assert.Contains(AgentConfigurationCapabilities.Update, provides);
+        Assert.DoesNotContain(AgentConfigurationCapabilities.Describe, provides);
+        Assert.DoesNotContain(AgentConfigurationCapabilities.Update, provides);
+        var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
+            .Select(x => x.GetProperty("key").GetString()).ToList();
+        Assert.Equal(["llmProviderId", "llmModel", "responseTone", "proactivePlanning", "maxPlanItems"], configurationKeys);
         Assert.Contains(PlatformCapabilities.BusinessProfileRead, requires);
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
         Assert.Contains(AgentCatalogCapabilities.Search, requires);
@@ -396,7 +399,7 @@ What type of business are you building?
             "Active",
             [
                 new OrganizationPerson(
-                    chiefId, "C-Sweet Chief of Staff", "Agent", null, ownerId, chiefInstallationId, true),
+                    chiefId, "Sherly", "Agent", null, ownerId, chiefInstallationId, true),
                 new OrganizationPerson(
                     ownerId, "Owner", "Human", null, null, null, true),
                 new OrganizationPerson(
@@ -488,9 +491,9 @@ What type of business are you building?
             chiefInstallationId.ToString("D"),
             new AgentIdentity(
                 chiefId.ToString("D"),
-                "C-Sweet Chief of Staff",
+                "Sherly",
                 null,
-                "Chief of Staff",
+                null,
                 null,
                 [],
                 null,
@@ -541,6 +544,54 @@ What type of business are you building?
                 .Select(action => action.Parameters.GetProperty("role").GetString()!)
                 .ToArray());
         Assert.Equal(2, suggestedActions.Select(action => action.IdempotencyKey).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task ApprovedResourceChange_NotVisibleToChiefFailsInsteadOfSilentlyCompleting()
+    {
+        var organizationId = Guid.NewGuid();
+        var installationId = Guid.NewGuid();
+        var chiefId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<ResourceChangeReadRequest, ResourceChangeReadResponse>(
+                PlatformCapabilities.ResourceChangeRead,
+                (_, _) => Task.FromResult(new ResourceChangeReadResponse([])));
+        var context = runtime.CreateContext(
+            organizationId.ToString("D"),
+            installationId.ToString("D"),
+            new AgentIdentity(
+                chiefId.ToString("D"),
+                "Chief of Staff",
+                null,
+                "Chief of Staff",
+                null,
+                [],
+                null,
+                null,
+                null));
+        var agent = new ChiefOfStaffAgent(
+            NullLogger<ChiefOfStaffAgent>.Instance,
+            new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.HandleEventAsync(
+            new AgentEventEnvelope(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                ManagementEvents.ResourceChangeDecided,
+                JsonSerializer.SerializeToElement(new ResourceChangeDecisionEvent(
+                    requestId,
+                    organizationId,
+                    Guid.NewGuid(),
+                    chiefId,
+                    "Approved",
+                    DateTimeOffset.UtcNow)),
+                DateTimeOffset.UtcNow),
+            context,
+            CancellationToken.None));
+
+        Assert.Contains(requestId.ToString("D"), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not visible", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
