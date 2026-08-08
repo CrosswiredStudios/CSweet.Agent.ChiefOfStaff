@@ -53,6 +53,19 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
+    public async Task RootManifest_PassesSdkValidation()
+    {
+        var manifestPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "csweet-plugin.json"));
+
+        var manifest = await AgentManifestLoader.LoadAsync(manifestPath, CancellationToken.None);
+
+        Assert.Equal(ChiefOfStaffProfile.AgentId, manifest.Id);
+    }
+
+    [Fact]
     public void RootManifest_DeclaresManagementAndAuthoritativePlatformContracts()
     {
         var manifestPath = Path.GetFullPath(Path.Combine(
@@ -68,8 +81,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.All(provides.Concat(requires), capability =>
             Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
-        Assert.DoesNotContain(AgentConfigurationCapabilities.Describe, provides);
-        Assert.DoesNotContain(AgentConfigurationCapabilities.Update, provides);
+        Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
+        Assert.Contains(AgentConfigurationCapabilities.Update, provides);
         var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Select(x => x.GetProperty("key").GetString()).ToList();
         Assert.Equal(["llmProviderId", "llmModel", "responseTone", "proactivePlanning", "maxPlanItems"], configurationKeys);
