@@ -8,7 +8,7 @@
     <Version>1.11.1</Version>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CSweet.Agent.SDK" Version="3.1.1" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />
+    <PackageReference Include="CSweet.Agent.SDK" Version="3.2.0" Condition="'$(UseLocalCSweetAgentSdk)' != 'true'" />
     <PackageReference Include="CSweet.Memory" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="CSweet.Memory.MicrosoftAgentFramework" Version="0.1.1" Condition="'$(UseLocalCSweetMemory)' != 'true'" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.13.0" />
