@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CSweet.Memory;
+using CSweet.WorkManagement.Contracts;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
@@ -333,6 +334,38 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             cancellationToken);
 
         await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+    }
+
+    public override async Task<PersonalTodoResult> HandlePersonalTodoAsync(
+        PersonalTodoItem item, AgentRuntimeContext context, CancellationToken cancellationToken)
+    {
+        var mentionContext = string.Join(", ", item.Mentions.Select(x =>
+            $"{x.DisplayName} ({x.EmployeeType}, organizationUserId={x.OrganizationUserId:D})"));
+        var response = await GenerateResponseAsync(
+            new AssistantCapabilityInput(
+                Settings.GetGuid("llmProviderId") ?? Guid.Empty,
+                (item.SourceConversationId ?? item.Id).ToString("D"),
+                $"""
+Execute this claimed personal task within your existing Chief of Staff authority and currently
+granted platform tools. Do not request broader authority. Authoritative mentioned identities:
+{(string.IsNullOrEmpty(mentionContext) ? "none" : mentionContext)}
+
+Task: {item.Title}
+Details: {item.Description}
+
+Use brokered actions for every effect. Return `BLOCKED: <durable reason>` if the task is unsupported,
+impossible, or denied. Otherwise perform the task and return a concise completion summary.
+""",
+                new Dictionary<string, string>
+                {
+                    ["personalTodoItemId"] = item.Id.ToString("D"),
+                    ["sourceMessageId"] = item.SourceMessageId?.ToString("D") ?? string.Empty
+                },
+                MessageId: item.SourceMessageId ?? Guid.Empty),
+            ChiefOfStaffProfile.ConverseCapability, context, cancellationToken);
+        return response.Response.StartsWith("BLOCKED:", StringComparison.OrdinalIgnoreCase)
+            ? PersonalTodoResult.Blocked(response.Response[8..].Trim())
+            : PersonalTodoResult.Completed(response.Response);
     }
 
     protected override async Task<AgentWorkResult> ExecuteCapabilityCoreAsync(

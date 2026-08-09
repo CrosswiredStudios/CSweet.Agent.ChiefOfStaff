@@ -6,7 +6,7 @@ The source of truth for installation authorization remains
 package version `1.12.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
-`CSweet.Agent.SDK` 3.3.0; manifest-audit tests reject names missing from that catalog.
+`CSweet.Agent.SDK` 3.4.0; manifest-audit tests reject names missing from that catalog.
 
 ## How to read this catalog
 

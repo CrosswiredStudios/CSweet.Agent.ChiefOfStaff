@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -26,6 +26,14 @@
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
   "requires": [
+    { "name": "work.personal-todo.read.v1", "scope": "organization", "purpose": "Read resource-scoped personal queues" },
+    { "name": "work.personal-todo.add.v1", "scope": "organization", "purpose": "Add self or direct-report personal work" },
+    { "name": "work.personal-todo.reorder.v1", "scope": "organization", "purpose": "Reorder directly managed personal work" },
+    { "name": "work.personal-todo.requeue.v1", "scope": "organization", "purpose": "Requeue blocked personal work" },
+    { "name": "work.personal-todo.claim.v1", "scope": "organization", "purpose": "SDK-managed atomic personal work claims" },
+    { "name": "work.personal-todo.complete.v1", "scope": "organization", "purpose": "SDK-managed personal work completion" },
+    { "name": "work.personal-todo.block.v1", "scope": "organization", "purpose": "SDK-managed durable personal work blocking" },
+    { "name": "work.personal-todo.release.v1", "scope": "organization", "purpose": "SDK-managed personal work release" },
     { "name": "platform.user-input.request.v1", "scope": "organization", "purpose": "Ask the owner a bounded structured question" },
     { "name": "platform.llm.chat-stream.v1", "scope": "organization", "purpose": "Generate Chief of Staff responses" },
     { "name": "platform.business-profile.read.v1", "scope": "organization", "purpose": "Ground advice in the authoritative business profile" },
@@ -61,6 +69,8 @@
   ],
   "events": {
     "subscribes": [
+      "com.csweet.work.personal-todo.available.v1",
+      "com.csweet.communication.message.mentioned.v1",
       "com.csweet.agent.onboarded.v1",
       "com.csweet.user.message.received.v1",
       "com.csweet.action.completed.v1",
