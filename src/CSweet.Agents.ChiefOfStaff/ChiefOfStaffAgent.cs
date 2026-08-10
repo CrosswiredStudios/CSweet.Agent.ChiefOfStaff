@@ -12,7 +12,7 @@ using CSweet.WorkManagement.Contracts;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
-public sealed class ChiefOfStaffAgent : CSweetAgentBase
+public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
 {
     private readonly IAgentLlmClientFactory? _llmClientFactory;
     private readonly ILogger<ChiefOfStaffAgent> _logger;
@@ -37,6 +37,18 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     public override string AgentId => ChiefOfStaffProfile.AgentId;
 
     public override string Version => ChiefOfStaffProfile.Version;
+
+    public async Task OnActivatedAsync(
+        AgentActivationContext activation,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
+        _logger.LogInformation(
+            "Chief of Staff reconciled its personal hiring queue during {ActivationReason} activation {TickId}.",
+            activation.Reason,
+            activation.TickId);
+    }
 
     protected override string ConfigurationSchemaVersion => ChiefOfStaffProfile.ConfigurationSchemaVersion;
 
@@ -358,7 +370,23 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             var recommendation = backlog.Recommendations.SingleOrDefault(x => x.Id == recommendationId);
             if (recommendation is not null)
             {
-                return PersonalTodoResult.Blocked(
+                var ownerChat = await FindOwnerChatAsync(context, cancellationToken);
+                var messageId = await SendCommunicationMessageAsync(
+                    ownerChat.Id,
+                    $"My current priority recommendation is to hire **{recommendation.Title}**. " +
+                    $"{recommendation.Objective}\n\nI have moved this hiring item into Doing and will " +
+                    "complete it when the hire is fulfilled.",
+                    $"hiring-recommendation:{recommendation.Id:N}:manager-message",
+                    context,
+                    cancellationToken);
+                await SuggestMarketplaceActionAsync(
+                    messageId,
+                    recommendation.Title,
+                    recommendation.Id,
+                    $"hiring-recommendation:{recommendation.Id:N}:manager-action",
+                    context,
+                    cancellationToken);
+                return PersonalTodoResult.InProgress(
                     $"Awaiting the manager's review and hiring action for {recommendation.Title}.");
             }
 
@@ -881,6 +909,17 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 string.Equals(x.CorrelationId, correlationId, StringComparison.Ordinal));
             if (existing is not null)
             {
+                if (existing.Status == PersonalTodoStatuses.Blocked)
+                {
+                    _ = await context.Platform.PersonalTodo.RequeueAsync(
+                        new RequeuePersonalTodoItemRequest(
+                            existing.Id,
+                            existing.Revision,
+                            $"migrate-hiring-recommendation-to-doing:{recommendation.Id:N}"),
+                        cancellationToken);
+                    active = true;
+                    continue;
+                }
                 if (!active && existing.Status == PersonalTodoStatuses.Backlog)
                 {
                     _ = await context.Platform.PersonalTodo.ActivateAsync(
@@ -919,7 +958,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 StringComparison.Ordinal));
         if (item is null) return;
 
-        if (item.Status == PersonalTodoStatuses.Blocked)
+        if (item.Status is PersonalTodoStatuses.Blocked or PersonalTodoStatuses.Running)
         {
             _ = await context.Platform.PersonalTodo.RequeueAsync(
                 new RequeuePersonalTodoItemRequest(

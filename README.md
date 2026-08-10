@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet. The catalog repository name is `CSweet.Agent.ChiefOfStaff`; this checkout retains the historical `CSweetAgentChiefOfStaff` name.
 
-The agent uses `CSweet.Agent.SDK` 3.7.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.8.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. When an active Product Manager reports to it, coordination uses approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -11,8 +11,9 @@ It loads authoritative business, finance, organization, operating-pattern, manag
 - User-message and management-review events are durable work.
 - Assistant streaming is reported as durable progress; the callback terminal result completes work.
 - Onboarding is acknowledged only after its communication side effect succeeds.
-- Hiring recommendations are mirrored to the Chief's own sequenced personal board: one active role
-  advances through execution while lower-priority roles remain in Backlog.
+- Hiring recommendations are mirrored to the Chief's own sequenced personal board. The priority
+  role moves into Doing while the Chief messages its manager with a Marketplace action; fulfillment
+  moves that ticket to Done and activates the next Backlog role.
 - Company mutations use explicit platform capabilities and their approval/idempotency rules.
 - Model tools are loaded from the live grant revision.
 - Provider and service credentials never enter the process.
@@ -28,7 +29,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.7.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.8.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
