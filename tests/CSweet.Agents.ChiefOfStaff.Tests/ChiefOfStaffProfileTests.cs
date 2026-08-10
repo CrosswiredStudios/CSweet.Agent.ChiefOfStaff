@@ -1,5 +1,6 @@
 using CSweet.Agents.ChiefOfStaff;
 using CSweet.Agent.SDK;
+using CSweet.WorkManagement.Contracts;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -94,6 +95,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(PlatformCapabilities.UserInputRequest, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationUpsert, requires);
         Assert.Contains(PlatformCapabilities.HiringRecommendationList, requires);
+        Assert.Contains(PersonalTodoCapabilities.Activate, requires);
         Assert.Contains(ChiefOfStaffProfile.SuggestUserActionCapability, requires);
         Assert.DoesNotContain(PlatformCapabilities.HiringWorkflowStage, requires);
         Assert.Contains(ChiefOfStaffProfile.RecommendationFulfilledEvent, subscriptions);
@@ -425,6 +427,8 @@ What type of business are you building?
             [],
             DateTimeOffset.UtcNow);
         var upserts = new List<UpsertHiringRecommendationRequest>();
+        var recommendations = new List<HiringRecommendationResponse>();
+        var hiringTodos = new List<AddPersonalTodoItemRequest>();
         SendCommunicationMessageRequest? managerMessage = null;
         var suggestedActions = new List<SuggestUserActionRequest>();
         var runtime = new AgentTestRuntime()
@@ -436,13 +440,13 @@ What type of business are you building?
                 (_, _) => Task.FromResult(new ResourceChangeReadResponse([request])))
             .RegisterCapability<JsonElement, HiringBacklogResponse>(
                 PlatformCapabilities.HiringRecommendationList,
-                (_, _) => Task.FromResult(new HiringBacklogResponse([])))
+                (_, _) => Task.FromResult(new HiringBacklogResponse(recommendations)))
             .RegisterCapability<UpsertHiringRecommendationRequest, HiringRecommendationResponse>(
                 PlatformCapabilities.HiringRecommendationUpsert,
                 (input, _) =>
                 {
                     upserts.Add(input);
-                    return Task.FromResult(new HiringRecommendationResponse(
+                    var recommendation = new HiringRecommendationResponse(
                         Guid.NewGuid(),
                         input.WorkstreamId,
                         input.Title,
@@ -457,7 +461,21 @@ What type of business are you building?
                         RoleKey = input.RoleKey,
                         Headcount = input.Headcount,
                         SourceResourceChangeRequestId = input.SourceResourceChangeRequestId
-                    });
+                    };
+                    recommendations.Add(recommendation);
+                    return Task.FromResult(recommendation);
+                })
+            .RegisterCapability<object, PersonalTodoDirectory>(
+                PersonalTodoCapabilities.Read,
+                (_, _) => Task.FromResult(new PersonalTodoDirectory(
+                    [new PersonalTodoBoard(Guid.NewGuid(), chiefId, "Sherly", ownerId, "Owner", 1, [])],
+                    chiefId)))
+            .RegisterCapability<AddPersonalTodoItemRequest, PersonalTodoItem>(
+                PersonalTodoCapabilities.Add,
+                (input, _) =>
+                {
+                    hiringTodos.Add(input);
+                    return Task.FromResult(PersonalTodo(input, chiefId));
                 })
             .RegisterCapability<JsonElement, CommunicationHubResponse>(
                 ChiefOfStaffProfile.ReadCommunicationCapability,
@@ -542,6 +560,12 @@ What type of business are you building?
             Assert.StartsWith($"resource-change:{requestId:N}:role:", upsert.IdempotencyKey, StringComparison.Ordinal);
         });
         Assert.Equal([1, 2], upserts.Select(upsert => upsert.Headcount).ToArray());
+        Assert.Equal(2, hiringTodos.Count);
+        Assert.False(hiringTodos[0].StartInBacklog);
+        Assert.True(hiringTodos[1].StartInBacklog);
+        Assert.All(hiringTodos, todo =>
+            Assert.True(ChiefOfStaffAgent.TryGetHiringRecommendationId(
+                todo.CorrelationId, out _)));
         Assert.NotNull(managerMessage);
         Assert.Equal(managerChatId, managerMessage.ChatId);
         Assert.Contains("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
@@ -634,6 +658,9 @@ What type of business are you building?
         SendCommunicationMessageRequest? sent = null;
         SuggestUserActionRequest? suggested = null;
         var runtime = new AgentTestRuntime()
+            .RegisterCapability<object, PersonalTodoDirectory>(
+                PersonalTodoCapabilities.Read,
+                (_, _) => Task.FromResult(new PersonalTodoDirectory([], chiefId)))
             .RegisterCapability<JsonElement, HiringBacklogResponse>(
                 PlatformCapabilities.HiringRecommendationList,
                 (_, _) => Task.FromResult(new HiringBacklogResponse([next])))
@@ -702,6 +729,76 @@ What type of business are you building?
     }
 
     [Fact]
+    public void HiringTodoRequest_PreservesPriorityCorrelationAndDormantState()
+    {
+        var recommendation = new HiringRecommendationResponse(
+            Guid.NewGuid(), null, "Product Manager", "Own product outcomes.", "Suggested",
+            null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        {
+            Priority = 1,
+            RoleKey = "product-manager"
+        };
+
+        var request = ChiefOfStaffAgent.BuildHiringTodoRequest(
+            recommendation, startInBacklog: true);
+
+        Assert.Equal("Hire Product Manager", request.Title);
+        Assert.Equal(WorkPriorities.High, request.Priority);
+        Assert.True(request.StartInBacklog);
+        Assert.True(ChiefOfStaffAgent.TryGetHiringRecommendationId(
+            request.CorrelationId, out var parsed));
+        Assert.Equal(recommendation.Id, parsed);
+    }
+
+    [Fact]
+    public async Task ResolvedHiringTodo_ActivatesExactlyOneNextBacklogRole()
+    {
+        var chiefId = Guid.NewGuid();
+        var resolved = new HiringRecommendationResponse(
+            Guid.NewGuid(), null, "Product Manager", "Own product outcomes.", "Fulfilled",
+            null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { Priority = 1 };
+        var next = new HiringRecommendationResponse(
+            Guid.NewGuid(), null, "Software Developer", "Build the product.", "Suggested",
+            null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { Priority = 2 };
+        var currentItem = PersonalTodo(
+            ChiefOfStaffAgent.BuildHiringTodoRequest(resolved, false), chiefId) with
+        {
+            Status = PersonalTodoStatuses.Running
+        };
+        var nextItem = PersonalTodo(
+            ChiefOfStaffAgent.BuildHiringTodoRequest(next, true), chiefId);
+        ActivatePersonalTodoItemRequest? activated = null;
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<JsonElement, HiringBacklogResponse>(
+                PlatformCapabilities.HiringRecommendationList,
+                (_, _) => Task.FromResult(new HiringBacklogResponse([next])))
+            .RegisterCapability<object, PersonalTodoDirectory>(
+                PersonalTodoCapabilities.Read,
+                (_, _) => Task.FromResult(new PersonalTodoDirectory(
+                    [new PersonalTodoBoard(Guid.NewGuid(), chiefId, "Chief", null, null, 1,
+                        [currentItem, nextItem])], chiefId)))
+            .RegisterCapability<ActivatePersonalTodoItemRequest, PersonalTodoItem>(
+                PersonalTodoCapabilities.Activate,
+                (request, _) =>
+                {
+                    activated = request;
+                    return Task.FromResult(nextItem with { Status = PersonalTodoStatuses.Ready });
+                });
+        var agent = new ChiefOfStaffAgent(
+            NullLogger<ChiefOfStaffAgent>.Instance,
+            new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+        _ = await agent.HandlePersonalTodoAsync(
+            currentItem,
+            runtime.CreateContext(identity: new AgentIdentity(
+                chiefId.ToString("D"), "Chief", null, "Chief of Staff", null, [], null, null, null)),
+            CancellationToken.None);
+
+        Assert.NotNull(activated);
+        Assert.Equal(nextItem.Id, activated.ItemId);
+    }
+
+    [Fact]
     public void ManagementReport_ProducesPrioritizedConciseMarkdown()
     {
         var organization = new OrganizationSnapshotResponse(
@@ -746,6 +843,19 @@ What type of business are you building?
             false,
             Guid.NewGuid(),
             null);
+
+    private static PersonalTodoItem PersonalTodo(
+        AddPersonalTodoItemRequest request,
+        Guid ownerId) =>
+        new(
+            Guid.NewGuid(), Guid.NewGuid(), ownerId, ownerId, "Sherly",
+            request.Title, request.Description ?? string.Empty,
+            request.StartInBacklog ? PersonalTodoStatuses.Backlog : PersonalTodoStatuses.Ready,
+            request.Priority, 1024, 1, request.DueDate, request.SourceConversationId,
+            request.SourceMessageId, [], null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        {
+            CorrelationId = request.CorrelationId
+        };
 
     private static AgentEventEnvelope FulfilledEvent(
         Guid organizationId,

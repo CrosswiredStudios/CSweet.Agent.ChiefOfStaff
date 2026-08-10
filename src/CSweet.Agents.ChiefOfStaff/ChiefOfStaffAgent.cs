@@ -276,6 +276,19 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
             return;
         }
 
+        await EnsureDefaultProductManagerRecommendationAsync(
+            response,
+            $"user-message:{message.EventId:N}",
+            context,
+            cancellationToken);
+        await SyncHiringPersonalTodosAsync(
+            context,
+            Guid.TryParse(incoming.ConversationId, out var sourceConversationId)
+                ? sourceConversationId
+                : null,
+            incoming.MessageId == Guid.Empty ? null : incoming.MessageId,
+            cancellationToken);
+
         _logger.LogInformation(
             "Chief of Staff publishing validated response for conversation {ConversationId}. Sequence {Sequence}. ResponseLength {ResponseLength}.",
             conversationId,
@@ -339,6 +352,21 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase
     public override async Task<PersonalTodoResult> HandlePersonalTodoAsync(
         PersonalTodoItem item, AgentRuntimeContext context, CancellationToken cancellationToken)
     {
+        if (TryGetHiringRecommendationId(item.CorrelationId, out var recommendationId))
+        {
+            var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+            var recommendation = backlog.Recommendations.SingleOrDefault(x => x.Id == recommendationId);
+            if (recommendation is not null)
+            {
+                return PersonalTodoResult.Blocked(
+                    $"Awaiting the manager's review and hiring action for {recommendation.Title}.");
+            }
+
+            await ActivateNextHiringTodoAsync(backlog, context, cancellationToken);
+            return PersonalTodoResult.Completed(
+                "The hiring recommendation resolved and the next role was activated.");
+        }
+
         var mentionContext = string.Join(", ", item.Mentions.Select(x =>
             $"{x.DisplayName} ({x.EmployeeType}, organizationUserId={x.OrganizationUserId:D})"));
         var response = await GenerateResponseAsync(
@@ -489,6 +517,13 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             eventId,
             context,
             cancellationToken);
+        await EnsureDefaultProductManagerRecommendationAsync(
+            openingMessage,
+            $"agent-onboarded:{eventId:N}",
+            context,
+            cancellationToken);
+        await SyncHiringPersonalTodosAsync(
+            context, null, null, cancellationToken);
         var openingMessageId = await SendCommunicationMessageAsync(
             onboarding.ConversationId,
             openingMessage,
@@ -628,6 +663,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             actionableRecommendations.Add((delta, recommendation));
         }
 
+        await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
+
         if (request.Deltas.Count == 0) return;
         var messageId = await SendCommunicationMessageAsync(
             managerChat.Id,
@@ -754,6 +791,9 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             return;
         }
 
+        await ResumeFulfilledHiringTodoAsync(
+            fulfilled.RecommendationId, context, cancellationToken);
+
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         var next = backlog.Recommendations
             .OrderBy(x => x.Priority)
@@ -779,6 +819,188 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 context,
                 cancellationToken);
         }
+    }
+
+    private async Task EnsureDefaultProductManagerRecommendationAsync(
+        string response,
+        string idempotencyPrefix,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var recommendsProductManager = SplitResponseSegments(response).Any(segment =>
+            segment.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) &&
+            IsHiringRecommendationLine(segment));
+        if (!recommendsProductManager) return;
+
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        if (backlog.Recommendations.Any(x =>
+                NormalizeRoleIdentity(x.Title) == "productmanager"))
+            return;
+
+        _ = await context.Platform.UpsertHiringRecommendationAsync(
+            new UpsertHiringRecommendationRequest(
+                "Product Manager",
+                "Own customer discovery, product outcomes, strategy, roadmap, prioritization, requirements, and product-team design.",
+                null,
+                [],
+                null,
+                $"{idempotencyPrefix}:recommendation:product-manager")
+            {
+                Priority = 1,
+                RoleKey = "product-manager",
+                Headcount = 1
+            },
+            cancellationToken);
+    }
+
+    private async Task SyncHiringPersonalTodosAsync(
+        AgentRuntimeContext context,
+        Guid? sourceConversationId,
+        Guid? sourceMessageId,
+        CancellationToken cancellationToken)
+    {
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+        if (backlog.Recommendations.Count == 0) return;
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
+            throw new InvalidOperationException("The Chief of Staff employee identity is unavailable.");
+
+        var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
+        var board = directory.Boards.SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId);
+        var items = board?.Items ?? [];
+        var active = items.Any(x =>
+            TryGetHiringRecommendationId(x.CorrelationId, out _) &&
+            x.Status is PersonalTodoStatuses.Ready or PersonalTodoStatuses.Running or
+                PersonalTodoStatuses.Blocked);
+
+        foreach (var recommendation in backlog.Recommendations
+                     .OrderBy(x => x.Priority)
+                     .ThenBy(x => x.CreatedAt))
+        {
+            var correlationId = HiringTodoCorrelationId(recommendation.Id);
+            var existing = items.SingleOrDefault(x =>
+                string.Equals(x.CorrelationId, correlationId, StringComparison.Ordinal));
+            if (existing is not null)
+            {
+                if (!active && existing.Status == PersonalTodoStatuses.Backlog)
+                {
+                    _ = await context.Platform.PersonalTodo.ActivateAsync(
+                        new ActivatePersonalTodoItemRequest(
+                            existing.Id,
+                            existing.Revision,
+                            $"activate-hiring-recommendation:{recommendation.Id:N}"),
+                        cancellationToken);
+                    active = true;
+                }
+                continue;
+            }
+
+            var request = BuildHiringTodoRequest(
+                recommendation,
+                startInBacklog: active,
+                sourceConversationId,
+                sourceMessageId);
+            _ = await context.Platform.PersonalTodo.AddAsync(request, cancellationToken);
+            if (!request.StartInBacklog) active = true;
+        }
+    }
+
+    private async Task ResumeFulfilledHiringTodoAsync(
+        Guid recommendationId,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId)) return;
+        var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
+        var item = directory.Boards
+            .SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId)?
+            .Items.SingleOrDefault(x => string.Equals(
+                x.CorrelationId,
+                HiringTodoCorrelationId(recommendationId),
+                StringComparison.Ordinal));
+        if (item is null) return;
+
+        if (item.Status == PersonalTodoStatuses.Blocked)
+        {
+            _ = await context.Platform.PersonalTodo.RequeueAsync(
+                new RequeuePersonalTodoItemRequest(
+                    item.Id,
+                    item.Revision,
+                    $"resolve-hiring-recommendation:{recommendationId:N}"),
+                cancellationToken);
+        }
+        else if (item.Status == PersonalTodoStatuses.Backlog)
+        {
+            _ = await context.Platform.PersonalTodo.ActivateAsync(
+                new ActivatePersonalTodoItemRequest(
+                    item.Id,
+                    item.Revision,
+                    $"resolve-hiring-recommendation:{recommendationId:N}"),
+                cancellationToken);
+        }
+    }
+
+    private static async Task ActivateNextHiringTodoAsync(
+        HiringBacklogResponse backlog,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId)) return;
+        var activeRecommendationIds = backlog.Recommendations.Select(x => x.Id).ToHashSet();
+        var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
+        var next = directory.Boards
+            .SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId)?
+            .Items.Where(x => x.Status == PersonalTodoStatuses.Backlog &&
+                TryGetHiringRecommendationId(x.CorrelationId, out var id) &&
+                activeRecommendationIds.Contains(id))
+            .OrderBy(x => x.Rank)
+            .ThenBy(x => x.CreatedAt)
+            .FirstOrDefault();
+        if (next is null) return;
+
+        _ = await context.Platform.PersonalTodo.ActivateAsync(
+            new ActivatePersonalTodoItemRequest(
+                next.Id,
+                next.Revision,
+                $"activate-next-hiring-todo:{next.Id:N}"),
+            cancellationToken);
+    }
+
+    internal static AddPersonalTodoItemRequest BuildHiringTodoRequest(
+        HiringRecommendationResponse recommendation,
+        bool startInBacklog,
+        Guid? sourceConversationId = null,
+        Guid? sourceMessageId = null)
+    {
+        if (sourceConversationId.HasValue != sourceMessageId.HasValue)
+        {
+            sourceConversationId = null;
+            sourceMessageId = null;
+        }
+
+        return new AddPersonalTodoItemRequest(
+            $"Hire {recommendation.Title}",
+            $"Advance hiring recommendation {recommendation.Id:D}. Objective: {recommendation.Objective}",
+            recommendation.Priority == 1 ? WorkPriorities.High : WorkPriorities.Medium,
+            null,
+            $"hiring-recommendation:{recommendation.Id:N}:personal-todo",
+            null,
+            sourceConversationId,
+            sourceMessageId,
+            HiringTodoCorrelationId(recommendation.Id))
+        {
+            StartInBacklog = startInBacklog
+        };
+    }
+
+    internal static string HiringTodoCorrelationId(Guid recommendationId) =>
+        $"hiring-recommendation:{recommendationId:N}";
+
+    internal static bool TryGetHiringRecommendationId(string? correlationId, out Guid recommendationId)
+    {
+        const string prefix = "hiring-recommendation:";
+        recommendationId = Guid.Empty;
+        return correlationId?.StartsWith(prefix, StringComparison.Ordinal) == true &&
+               Guid.TryParseExact(correlationId[prefix.Length..], "N", out recommendationId);
     }
 
     private async Task AttachTopHiringActionAsync(
