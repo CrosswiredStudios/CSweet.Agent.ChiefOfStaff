@@ -17,6 +17,63 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
+    public void ModelCannotSuggestUserActionBeforeAConversationAnchorExists()
+    {
+        var input = new AssistantCapabilityInput(
+            Guid.NewGuid(),
+            Guid.NewGuid().ToString("D"),
+            "Prepare the onboarding message.",
+            null);
+
+        Assert.False(ChiefOfStaffAgent.IsModelToolAvailable(input, "suggest_user_action"));
+        Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(
+            input with { MessageId = Guid.NewGuid() },
+            "suggest_user_action"));
+        Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(
+            input with { ChatTurnId = Guid.NewGuid() },
+            "suggest_user_action"));
+        Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(input, "organization_read"));
+    }
+
+    [Fact]
+    public async Task OptionalOnboardingActionFailureDoesNotFailTheGreeting()
+    {
+        var recommendation = new HiringRecommendationResponse(
+            Guid.NewGuid(),
+            null,
+            "Product Manager",
+            "Own product outcomes.",
+            "Suggested",
+            null,
+            [],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow)
+        {
+            Priority = 1
+        };
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<JsonElement, HiringBacklogResponse>(
+                PlatformCapabilities.HiringRecommendationList,
+                (_, _) => Task.FromResult(new HiringBacklogResponse([recommendation])))
+            .RegisterCapability<SuggestUserActionRequest, SuggestedUserActionResponse>(
+                PlatformCapabilities.UserActionSuggest,
+                (_, _) => Task.FromException<SuggestedUserActionResponse>(
+                    new PlatformCapabilityException(
+                        PlatformCapabilities.UserActionSuggest,
+                        PlatformCapabilityErrorCode.ValidationFailed,
+                        "The optional action was rejected.")));
+        var agent = new ChiefOfStaffAgent(
+            NullLogger<ChiefOfStaffAgent>.Instance,
+            new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+        await agent.AttachTopHiringActionAsync(
+            Guid.NewGuid(),
+            "agent-onboarded:test",
+            runtime.CreateContext(),
+            CancellationToken.None);
+    }
+
+    [Fact]
     public void Profile_UsesThirdPartyIdentityAndCompatibleConversationContract()
     {
         Assert.Equal("com.csweet.chief-of-staff", ChiefOfStaffProfile.AgentId);

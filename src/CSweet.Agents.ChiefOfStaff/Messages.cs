@@ -22,15 +22,6 @@ internal sealed record CommunicationHubActionResponse(
     string Message,
     CommunicationChatResponse? Chat = null);
 
-public sealed record SuggestUserActionRequest(
-    Guid? MessageId,
-    Guid? ChatTurnId,
-    string WorkflowType,
-    string Label,
-    string? Description,
-    System.Text.Json.JsonElement Parameters,
-    string IdempotencyKey);
-
 public sealed record UserMessageReceived(
     Guid ProviderProfileId,
     string ConversationId,

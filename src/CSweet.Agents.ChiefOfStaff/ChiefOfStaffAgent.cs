@@ -558,13 +558,13 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             $"agent-onboarded:{eventId:N}",
             context,
             cancellationToken);
+        _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
+            message,
+            cancellationToken);
         await AttachTopHiringActionAsync(
             openingMessageId,
             $"agent-onboarded:{eventId:N}",
             context,
-            cancellationToken);
-        _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
-            message,
             cancellationToken);
 
         _logger.LogInformation(
@@ -1042,25 +1042,37 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                Guid.TryParseExact(correlationId[prefix.Length..], "N", out recommendationId);
     }
 
-    private async Task AttachTopHiringActionAsync(
+    internal async Task AttachTopHiringActionAsync(
         Guid messageId,
         string idempotencyPrefix,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
-        var next = backlog.Recommendations
-            .OrderBy(x => x.Priority)
-            .ThenBy(x => x.CreatedAt)
-            .FirstOrDefault();
-        if (next is null) return;
-        await SuggestMarketplaceActionAsync(
-            messageId,
-            next.Title,
-            next.Id,
-            $"{idempotencyPrefix}:action:{next.Id:N}",
-            context,
-            cancellationToken);
+        try
+        {
+            var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+            var next = backlog.Recommendations
+                .OrderBy(x => x.Priority)
+                .ThenBy(x => x.CreatedAt)
+                .FirstOrDefault();
+            if (next is null) return;
+            await SuggestMarketplaceActionAsync(
+                messageId,
+                next.Title,
+                next.Id,
+                $"{idempotencyPrefix}:action:{next.Id:N}",
+                context,
+                cancellationToken);
+        }
+        catch (PlatformCapabilityException exception)
+        {
+            // The greeting and onboarding acknowledgement are the durable primary effects.
+            // A convenience CTA must never make that completed onboarding work fail.
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not attach the optional hiring action to onboarding message {MessageId}.",
+                messageId);
+        }
     }
 
     private async Task AttachMentionedHiringActionAsync(
@@ -1080,8 +1092,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             !response.Contains(next.Title, StringComparison.OrdinalIgnoreCase))
             return;
 
-        _ = await context.Platform.InvokeAsync<SuggestUserActionRequest, JsonElement>(
-            ChiefOfStaffProfile.SuggestUserActionCapability,
+        _ = await context.Platform.SuggestUserActionAsync(
             new SuggestUserActionRequest(
                 null,
                 chatTurnId,
@@ -1101,8 +1112,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        _ = await context.Platform.InvokeAsync<SuggestUserActionRequest, JsonElement>(
-            ChiefOfStaffProfile.SuggestUserActionCapability,
+        _ = await context.Platform.SuggestUserActionAsync(
             new SuggestUserActionRequest(
                 messageId,
                 null,
@@ -1440,7 +1450,10 @@ Use exactly one path: recommendation or clarification. If you identify a first h
             new SessionStateMemoryPartitionResolver(memoryOptions),
             memoryOptions);
 
-        var tools = (await runtimeContext.GetModelToolsAsync(cancellationToken)).ToList();
+        var tools = (await runtimeContext.GetModelToolsAsync(cancellationToken))
+            .Where(tool => tool is not AIFunctionDeclaration function ||
+                           IsModelToolAvailable(input, function.Name))
+            .ToList();
         if (tools.Any(tool => tool is AIFunctionDeclaration function &&
                             function.Name == "product_management_plan"))
         {
@@ -1544,6 +1557,11 @@ Use exactly one path: recommendation or clarification. If you identify a first h
             ProposedActions: [],
             DateTimeOffset.UtcNow);
     }
+
+    internal static bool IsModelToolAvailable(AssistantCapabilityInput input, string toolName) =>
+        !string.Equals(toolName, "suggest_user_action", StringComparison.Ordinal) ||
+        input.MessageId != Guid.Empty ||
+        input.ChatTurnId != Guid.Empty;
 
     internal static async Task<ProductPlanResponse> ConsultProductManagerAsync(
         string focus,
