@@ -175,11 +175,15 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("durable personal to-do list", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("one-line role map", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("one-line CEO-direct manager map", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("only the highest-priority unfilled role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never print, describe, or imitate a tool call", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ask one concise plain-text question instead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Consult an active Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Originate hiring recommendations only for accountable managers who report directly to the CEO", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("defer the recommendation to the appropriate product or functional lead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("clearly overrides this boundary", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("These suggestions remain the lead's recommendations", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -187,6 +191,37 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never ask a question in the same response that makes a recommendation", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("do not ask for information merely because a profile field is incomplete", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProductManagerLiaison_RequiresAnActiveAgentSharingTheHumanCeo()
+    {
+        var ceoId = Guid.NewGuid();
+        var otherCeoId = Guid.NewGuid();
+        var chief = new OrganizationPerson(
+            Guid.NewGuid(), "Chief of Staff", "Agent", null, ceoId, Guid.NewGuid(), true);
+        var peerProductManager = new OrganizationPerson(
+            Guid.NewGuid(), "Product Manager", "Agent", null, ceoId, Guid.NewGuid(), true);
+        var unrelatedProductManager = new OrganizationPerson(
+            Guid.NewGuid(), "Product Manager West", "Agent", null, otherCeoId, Guid.NewGuid(), true);
+        var organization = new OrganizationSnapshotResponse(
+            Guid.NewGuid(),
+            "Active",
+            [
+                chief,
+                peerProductManager,
+                unrelatedProductManager,
+                new OrganizationPerson(ceoId, "CEO", "Human", null, null, null, true),
+                new OrganizationPerson(otherCeoId, "Other CEO", "Human", null, null, null, true)
+            ],
+            [], [], [], [], DateTimeOffset.UtcNow);
+
+        Assert.True(ChiefOfStaffAgent.IsProductManagerLiaison(
+            chief, peerProductManager, organization));
+        Assert.False(ChiefOfStaffAgent.IsProductManagerLiaison(
+            chief, unrelatedProductManager, organization));
+        Assert.False(ChiefOfStaffAgent.IsProductManagerLiaison(
+            chief, peerProductManager with { EmployeeType = "Human" }, organization));
     }
 
     [Fact]
@@ -426,10 +461,12 @@ What type of business are you building?
         Assert.Contains("**Modify: Game Designer**", brief);
         Assert.Contains("**Remove: Legacy Generalist**", brief);
         Assert.Contains("candidate-free hiring suggestions", brief, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Product Manager-authored", brief, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("administered by the Chief", brief, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task ApprovedResourceChange_CreatesHiringSuggestionsAndBriefsChiefManager()
+    public async Task CeoApprovedProductManagerResourceChange_CreatesLeadAuthoredSuggestionsAndBriefsCeo()
     {
         var organizationId = Guid.NewGuid();
         var chiefInstallationId = Guid.NewGuid();
@@ -455,7 +492,7 @@ What type of business are you building?
             organizationId,
             productManagerId,
             Guid.NewGuid(),
-            chiefId,
+            ownerId,
             Guid.NewGuid(),
             Guid.Empty,
             "Ship the first browser game",
@@ -483,7 +520,7 @@ What type of business are you building?
                 new OrganizationPerson(
                     ownerId, "Owner", "Human", null, null, null, true),
                 new OrganizationPerson(
-                    productManagerId, "C-Sweet Product Manager", "Agent", null, chiefId,
+                    productManagerId, "C-Sweet Product Manager", "Agent", null, ownerId,
                     request.RequesterInstallationId, true)
             ],
             [],

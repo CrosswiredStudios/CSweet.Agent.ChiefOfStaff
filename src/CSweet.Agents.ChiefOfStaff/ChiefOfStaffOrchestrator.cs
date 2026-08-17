@@ -285,7 +285,7 @@ OWNER MESSAGE:
             profile.TargetCustomers.Count > 0 ||
             profile.Offerings.Count > 0;
         return hasStaffingSignal
-            ? $"{understood} There is enough business context to begin ranking the roles required to deliver that mission; I'll start with the single highest-impact vacancy."
+            ? $"{understood} There is enough business context to identify the CEO-direct manager accountable for that mission; that manager will own the subordinate team design."
             : $"{understood} What type of business are you building, and what outcome should it deliver for customers?";
     }
 
@@ -418,7 +418,7 @@ OWNER MESSAGE:
             [
                 "Recommend product strategy, priorities, roadmap, requirements, and success measures.",
                 "Design the product-team structure and recommend product-specific hiring order.",
-                "Escalate company strategy, budget, hiring, and organization-wide commitments to the Chief of Staff."
+                "Use the Chief of Staff as liaison for company strategy, budget, hiring, and organization-wide commitments that require CEO attention."
             ],
             knownTeam,
             gaps,
@@ -431,7 +431,7 @@ OWNER MESSAGE:
     {
         var feedback = new List<string>
         {
-            "The Chief retains company-wide organization, candidate sourcing, hiring, spending, and approval authority."
+            "The Product Manager owns product-team design; the Chief reconciles company-wide constraints and acts as liaison, while the CEO retains approval authority."
         };
         if (context.FinancialProfile?.MaximumConcurrentHires is { } cap &&
             request.Plan.TeamStructure.Count(x => x.Timing.Equals("Now", StringComparison.OrdinalIgnoreCase)) > cap)

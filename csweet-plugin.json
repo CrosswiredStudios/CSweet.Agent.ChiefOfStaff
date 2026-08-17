@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.15.1",
+  "version": "1.16.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -19,9 +19,9 @@
     { "name": "assistant.summarize-activity.v1", "description": "Summarize operating activity.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
     { "name": "assistant.plan-work.v1", "description": "Plan executive work.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
     { "name": "management.check-in.v1", "description": "Run an executive check-in.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.product-role-brief.v1", "description": "Produce an authoritative Product Manager role brief.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
-    { "name": "management.product-plan.review.v1", "description": "Review a Product Manager plan.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.product-escalation.v1", "description": "Escalate a Product Manager decision to the owner.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
+    { "name": "management.product-role-brief.v1", "description": "Produce an authoritative role brief for a CEO-peer Product Manager.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
+    { "name": "management.product-plan.review.v1", "description": "Review a CEO-peer Product Manager plan for company-level reconciliation.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
+    { "name": "management.product-escalation.v1", "description": "Relay a CEO-peer Product Manager decision to the CEO.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
     { "name": "agent.configuration.describe.v1", "description": "Describe Chief of Staff configuration.", "inputSchema": { "type": "object", "additionalProperties": false }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "none" },
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
@@ -59,8 +59,8 @@
     { "name": "agent.onboarding.complete.v1", "scope": "organization", "purpose": "Acknowledge completion of this installation's durable onboarding event" },
     { "name": "communication.chat.create.v1", "scope": "organization", "purpose": "Open or reuse a direct conversation with the Chief's current manager" },
     { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" },
-    { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult the active Product Manager on product and product-team decisions" },
-    { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Manager direct reports" }
+    { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult an active Product Manager sharing the Chief's CEO manager" },
+    { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Managers sharing the Chief's CEO manager" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
     ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision" }

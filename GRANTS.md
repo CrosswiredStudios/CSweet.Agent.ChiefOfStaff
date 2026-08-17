@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `1.15.1` and manifest protocol `2.0`.
+package version `1.16.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 3.8.0; manifest-audit tests reject names missing from that catalog.
@@ -72,9 +72,10 @@ policy at runtime.
 | `platform.management.resource-change.decide.v1` | organization | Decide a request only when this Chief is the requester's current manager. |
 | `platform.user-action.suggest.v1` | organization | Attach a platform-resolved Marketplace action to a Chief message. |
 
-These grants are Chief-owned. Product Manager installations deliberately do not receive them.
-Approved Product Manager resource changes are reconciled into one candidate-free recommendation
-per added or increased role. The Chief sends its manager one idempotent combined brief for the
+These administrative grants are Chief-owned. Product Manager installations deliberately do not
+receive them, but retain authorship of their team designs. CEO-approved Product Manager resource
+changes are reconciled into one candidate-free recommendation per added or increased role. The
+Chief sends the CEO one idempotent combined brief for the
 complete change set and creates one separately actionable Marketplace CTA system message per new
 or increased role. Recommendation-scoped idempotency keys prevent event retries from duplicating
 those CTA messages.
@@ -101,11 +102,11 @@ those CTA messages.
 
 | Grant | Scope | Provider | Feature |
 |---|---|---|---|
-| `product-management.plan.v1` | organization | Product Manager | Request product strategy, roadmap, and product-team recommendations. |
-| `product-management.context.update.v1` | organization | Product Manager | Push authoritative role, decision, and context updates to Product Manager direct reports. |
+| `product-management.plan.v1` | organization | Product Manager | Request product strategy, roadmap, and product-team recommendations from an active Product Manager sharing the Chief's CEO manager. |
+| `product-management.context.update.v1` | organization | Product Manager | Push authoritative role, decision, and context updates to Product Managers sharing the Chief's CEO manager. |
 
 Cross-agent calls target an exact installation and both agents validate the current organization
-and reporting relationship rather than trusting caller-supplied identity.
+and shared CEO reporting relationship rather than trusting caller-supplied identity.
 
 ## Capabilities provided by the Chief
 

@@ -450,7 +450,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 return AgentWorkResult.Failure("The Product Manager role-brief request is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, roleBriefRequest, context, operatingContext))
-                return AgentWorkResult.Failure("Only an active Product Manager direct report may request a role brief.");
+                return AgentWorkResult.Failure("Only an active Product Manager sharing this Chief's CEO manager may request a role brief.");
             if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
                 return AgentWorkResult.Failure("The Chief employee identity is unavailable.");
             return new AgentWorkResult(true, SerializePayload(
@@ -467,7 +467,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 return AgentWorkResult.Failure("The Product Manager plan-review request is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, reviewRequest, context, operatingContext))
-                return AgentWorkResult.Failure("Only an active Product Manager direct report may submit a product plan.");
+                return AgentWorkResult.Failure("Only an active Product Manager sharing this Chief's CEO manager may submit a product plan.");
             return new AgentWorkResult(true, SerializePayload(
                 ChiefOfStaffOrchestrator.BuildProductPlanReview(reviewRequest, operatingContext)));
         }
@@ -479,7 +479,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 return AgentWorkResult.Failure("The Product Manager escalation is invalid.");
             var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
             if (!IsAuthorizedProductManagerRequest(request.RequestingAgentId, escalation, context, operatingContext))
-                return AgentWorkResult.Failure("Only an active Product Manager direct report may escalate a decision.");
+                return AgentWorkResult.Failure("Only an active Product Manager sharing this Chief's CEO manager may escalate a decision.");
             try
             {
                 var response = await EscalateProductDecisionToOwnerAsync(escalation, context, cancellationToken);
@@ -717,7 +717,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
     internal static string BuildResourceChangeManagerBrief(ResourceChangeRequestResponse request)
     {
         var content = new StringBuilder();
-        content.Append("Approved product-team staffing update for **")
+        content.Append("CEO-approved, Product Manager-authored staffing update for **")
             .Append(request.ProductGoal)
             .AppendLine("**")
             .AppendLine();
@@ -740,7 +740,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         }
 
         content.AppendLine()
-            .Append("Added and increased roles are now candidate-free hiring suggestions. ")
+            .Append("Added and increased roles are now candidate-free hiring suggestions administered by the Chief on behalf of the Product Manager. ")
             .Append("Marketplace review, spending, installation, and each hire remain separately approved.");
         return content.ToString();
     }
@@ -1191,8 +1191,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         const string onboardingRequest = """
 This is your first message after being hired into this business. Review the authoritative business, financial, organization, and hiring-backlog context before responding.
 
-Do not use a generic welcome or ask the owner to repeat facts already present in the business profile. If the available data is sufficient, give a brief business-specific assessment, name the compact role map, identify the single most important role to fill first and why, and begin the normal ranked-hiring-backlog workflow. If the available data is insufficient to choose the first role responsibly, state what you already understand and ask only the single highest-value clarification. Do not use a multi-part intake questionnaire.
-Use exactly one path: recommendation or clarification. If you identify a first hire, update or mention the hiring backlog, or suggest a Marketplace action, do not ask any question in that message. Missing details that would merely refine an already supportable recommendation are not a reason to ask. Ask only when one missing fact makes the first-hire decision impossible, and then provide no recommendation or suggested action.
+Do not use a generic welcome or ask the owner to repeat facts already present in the business profile. If the available data is sufficient, give a brief business-specific assessment, name the compact CEO-direct manager map, identify the single most important accountable manager to fill first and why, and begin the normal ranked-hiring-backlog workflow. Do not originate subordinate specialist recommendations; the selected manager owns creation of that team. If the available data is insufficient to choose the first manager responsibly, state what you already understand and ask only the single highest-value clarification. Do not use a multi-part intake questionnaire.
+Use exactly one path: recommendation or clarification. If you identify a first managerial hire, update or mention the hiring backlog, or suggest a Marketplace action, do not ask any question in that message. Missing details that would merely refine an already supportable recommendation are not a reason to ask. Ask only when one missing fact makes the first-manager decision impossible, and then provide no recommendation or suggested action.
 """;
 
         try
@@ -1465,7 +1465,7 @@ Use exactly one path: recommendation or clarification. If you identify a first h
                     runtimeContext,
                     token),
                 "consult_product_manager",
-                "Consult the active Product Manager direct report for product strategy, discovery, roadmap, requirements, priorities, or product-team design."));
+                "Consult the active Product Manager sharing this Chief's CEO manager for product strategy, discovery, roadmap, requirements, priorities, or product-team design."));
         }
 
         var useAgentMemory = input.ChatTurnId == Guid.Empty;
@@ -1574,23 +1574,15 @@ Use exactly one path: recommendation or clarification. If you identify a first h
             throw new InvalidOperationException("The Chief employee identity is unavailable.");
         var organization = operatingContext.Organization
             ?? throw new InvalidOperationException("The organization snapshot is unavailable.");
+        var chief = organization.People.SingleOrDefault(person =>
+            person.Id == chiefId &&
+            person.IsActive)
+            ?? throw new InvalidOperationException("The Chief of Staff is not active in the organization snapshot.");
         var productManager = organization.People
-            .Where(person =>
-            {
-                if (!person.IsActive ||
-                    person.ReportsToId != chiefId ||
-                    person.AgentInstallationId is null ||
-                    !person.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase))
-                    return false;
-                var roleName = person.RoleId.HasValue
-                    ? organization.Roles.SingleOrDefault(x => x.Id == person.RoleId.Value)?.Name
-                    : null;
-                return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                       person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
-            })
+            .Where(person => IsProductManagerLiaison(chief, person, organization))
             .OrderBy(x => x.DisplayName)
             .FirstOrDefault()
-            ?? throw new InvalidOperationException("No active Product Manager reports to this Chief of Staff.");
+            ?? throw new InvalidOperationException("No active Product Manager shares this Chief of Staff's CEO manager.");
         var brief = ChiefOfStaffOrchestrator.BuildProductRoleBrief(
             operatingContext,
             chiefId,
@@ -1664,17 +1656,46 @@ Use exactly one path: recommendation or clarification. If you identify a first h
         if (!string.Equals(requestingAgentId, "com.csweet.product-manager", StringComparison.Ordinal) ||
             !Guid.TryParse(runtimeContext.Identity?.EmployeeId, out var chiefId))
             return false;
+        var organization = operatingContext.Organization;
+        var chief = organization?.People.SingleOrDefault(x =>
+            x.Id == chiefId &&
+            x.IsActive);
         var productManager = operatingContext.Organization?.People.SingleOrDefault(x =>
             x.Id == productManagerId &&
             x.IsActive &&
             x.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase) &&
             x.AgentInstallationId == productManagerInstallationId);
-        if (productManager?.ReportsToId != chiefId) return false;
-        var roleName = productManager.RoleId.HasValue
-            ? operatingContext.Organization?.Roles.SingleOrDefault(x => x.Id == productManager.RoleId.Value)?.Name
+        return chief is not null &&
+               productManager is not null &&
+               organization is not null &&
+               IsProductManagerLiaison(chief, productManager, organization);
+    }
+
+    internal static bool IsProductManagerLiaison(
+        OrganizationPerson chief,
+        OrganizationPerson candidate,
+        OrganizationSnapshotResponse organization)
+    {
+        if (!chief.IsActive ||
+            chief.ReportsToId is not { } ceoId ||
+            candidate.Id == chief.Id ||
+            !candidate.IsActive ||
+            candidate.ReportsToId != ceoId ||
+            candidate.AgentInstallationId is null ||
+            !candidate.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var ceo = organization.People.SingleOrDefault(person =>
+            person.Id == ceoId &&
+            person.IsActive &&
+            person.EmployeeType.Equals("Human", StringComparison.OrdinalIgnoreCase));
+        if (ceo is null) return false;
+
+        var roleName = candidate.RoleId.HasValue
+            ? organization.Roles.SingleOrDefault(role => role.Id == candidate.RoleId.Value)?.Name
             : null;
         return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
-               productManager.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
+               candidate.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<ProductEscalationResponse> EscalateProductDecisionToOwnerAsync(
@@ -1730,20 +1751,14 @@ Use exactly one path: recommendation or clarification. If you identify a first h
         var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
         var organization = operatingContext.Organization;
         if (organization is null) return;
+        var chief = organization.People.SingleOrDefault(person =>
+            person.Id == chiefId &&
+            person.IsActive);
+        if (chief is null) return;
         var sourceId = sourceEventId;
-        var productManagers = organization.People.Where(person =>
-        {
-            if (!person.IsActive ||
-                person.ReportsToId != chiefId ||
-                person.AgentInstallationId is null ||
-                !person.EmployeeType.Equals("Agent", StringComparison.OrdinalIgnoreCase))
-                return false;
-            var roleName = person.RoleId.HasValue
-                ? organization.Roles.SingleOrDefault(x => x.Id == person.RoleId.Value)?.Name
-                : null;
-            return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                   person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
-        }).ToList();
+        var productManagers = organization.People
+            .Where(person => IsProductManagerLiaison(chief, person, organization))
+            .ToList();
 
         foreach (var productManager in productManagers)
         {
