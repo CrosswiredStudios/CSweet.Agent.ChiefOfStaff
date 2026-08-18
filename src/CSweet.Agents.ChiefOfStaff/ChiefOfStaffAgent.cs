@@ -370,22 +370,6 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             var recommendation = backlog.Recommendations.SingleOrDefault(x => x.Id == recommendationId);
             if (recommendation is not null)
             {
-                var ownerChat = await FindOwnerChatAsync(context, cancellationToken);
-                var messageId = await SendCommunicationMessageAsync(
-                    ownerChat.Id,
-                    $"My current priority recommendation is to hire **{recommendation.Title}**. " +
-                    $"{recommendation.Objective}\n\nI have moved this hiring item into Doing and will " +
-                    "complete it when the hire is fulfilled.",
-                    $"hiring-recommendation:{recommendation.Id:N}:manager-message",
-                    context,
-                    cancellationToken);
-                await SuggestMarketplaceActionAsync(
-                    messageId,
-                    recommendation.Title,
-                    recommendation.Id,
-                    $"hiring-recommendation:{recommendation.Id:N}:manager-action",
-                    context,
-                    cancellationToken);
                 return PersonalTodoResult.InProgress(
                     $"Awaiting the manager's review and hiring action for {recommendation.Title}.");
             }
@@ -1558,10 +1542,9 @@ Use exactly one path: recommendation or clarification. If you identify a first m
             DateTimeOffset.UtcNow);
     }
 
-    internal static bool IsModelToolAvailable(AssistantCapabilityInput input, string toolName) =>
-        !string.Equals(toolName, "suggest_user_action", StringComparison.Ordinal) ||
-        input.MessageId != Guid.Empty ||
-        input.ChatTurnId != Guid.Empty;
+    internal static bool IsModelToolAvailable(AssistantCapabilityInput _, string toolName) =>
+        !string.Equals(toolName, "add_personal_todo", StringComparison.Ordinal) &&
+        !string.Equals(toolName, "suggest_user_action", StringComparison.Ordinal);
 
     internal static async Task<ProductPlanResponse> ConsultProductManagerAsync(
         string focus,

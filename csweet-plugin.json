@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -27,7 +27,7 @@
   ],
   "requires": [
     { "name": "work.personal-todo.read.v1", "scope": "organization", "purpose": "Read resource-scoped personal queues" },
-    { "name": "work.personal-todo.add.v1", "scope": "organization", "purpose": "Add self or direct-report personal work" },
+    { "name": "work.personal-todo.add.v1", "scope": "organization", "purpose": "Runtime-managed projection of hiring recommendations onto this Chief's personal board" },
     { "name": "work.personal-todo.reorder.v1", "scope": "organization", "purpose": "Reorder directly managed personal work" },
     { "name": "work.personal-todo.requeue.v1", "scope": "organization", "purpose": "Requeue blocked personal work" },
     { "name": "work.personal-todo.activate.v1", "scope": "organization", "purpose": "Activate the next sequenced hiring task from this Chief's own backlog" },

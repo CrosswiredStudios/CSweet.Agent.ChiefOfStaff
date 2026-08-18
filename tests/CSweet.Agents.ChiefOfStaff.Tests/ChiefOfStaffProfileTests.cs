@@ -17,7 +17,7 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
-    public void ModelCannotSuggestUserActionBeforeAConversationAnchorExists()
+    public void RuntimeOwnedHiringToolsAreNeverExposedToTheModel()
     {
         var input = new AssistantCapabilityInput(
             Guid.NewGuid(),
@@ -26,12 +26,13 @@ public sealed class ChiefOfStaffProfileTests
             null);
 
         Assert.False(ChiefOfStaffAgent.IsModelToolAvailable(input, "suggest_user_action"));
-        Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(
+        Assert.False(ChiefOfStaffAgent.IsModelToolAvailable(
             input with { MessageId = Guid.NewGuid() },
             "suggest_user_action"));
-        Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(
+        Assert.False(ChiefOfStaffAgent.IsModelToolAvailable(
             input with { ChatTurnId = Guid.NewGuid() },
             "suggest_user_action"));
+        Assert.False(ChiefOfStaffAgent.IsModelToolAvailable(input, "add_personal_todo"));
         Assert.True(ChiefOfStaffAgent.IsModelToolAvailable(input, "organization_read"));
     }
 
@@ -186,6 +187,10 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("These suggestions remain the lead's recommendations", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deterministic Chief runtime mirrors", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Do not call `add_personal_todo`", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Do not call it from model responses", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("is not a blocked condition", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -853,14 +858,11 @@ What type of business are you building?
     }
 
     [Fact]
-    public async Task ActiveHiringTodo_MessagesManagerAndRemainsInDoingUntilFulfilled()
+    public async Task ActiveHiringTodo_RemainsInDoingWithoutAnotherMessageOrAction()
     {
         var organizationId = Guid.NewGuid();
         var installationId = Guid.NewGuid();
         var chiefId = Guid.NewGuid();
-        var ownerId = Guid.NewGuid();
-        var chatId = Guid.NewGuid();
-        var messageId = Guid.NewGuid();
         var recommendation = new HiringRecommendationResponse(
             Guid.NewGuid(), null, "Product Manager", "Own product outcomes.", "Suggested",
             null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { Priority = 1 };
@@ -869,42 +871,10 @@ What type of business are you building?
         {
             Status = PersonalTodoStatuses.Running
         };
-        SendCommunicationMessageRequest? sent = null;
-        SuggestUserActionRequest? suggested = null;
         var runtime = new AgentTestRuntime()
             .RegisterCapability<JsonElement, HiringBacklogResponse>(
                 PlatformCapabilities.HiringRecommendationList,
-                (_, _) => Task.FromResult(new HiringBacklogResponse([recommendation])))
-            .RegisterCapability<JsonElement, CommunicationHubResponse>(
-                ChiefOfStaffProfile.ReadCommunicationCapability,
-                (_, _) => Task.FromResult(new CommunicationHubResponse(
-                    chiefId,
-                    true,
-                    [new CommunicationChatResponse(
-                        chatId, string.Empty, null, true, true, true, true,
-                        DateTimeOffset.UtcNow,
-                        [
-                            new CommunicationParticipantResponse(
-                                chiefId, "Chief", "Agent", "Chief of Staff"),
-                            new CommunicationParticipantResponse(ownerId, "Owner", "Human", "CEO")
-                        ],
-                        null, null, 0)],
-                    [],
-                    [])))
-            .RegisterCapability<SendCommunicationMessageRequest, JsonElement>(
-                ChiefOfStaffProfile.SendCommunicationMessageCapability,
-                (request, _) =>
-                {
-                    sent = request;
-                    return Task.FromResult(JsonSerializer.SerializeToElement(new { id = messageId }));
-                })
-            .RegisterCapability<SuggestUserActionRequest, JsonElement>(
-                ChiefOfStaffProfile.SuggestUserActionCapability,
-                (request, _) =>
-                {
-                    suggested = request;
-                    return Task.FromResult(JsonSerializer.SerializeToElement(new { accepted = true }));
-                });
+                (_, _) => Task.FromResult(new HiringBacklogResponse([recommendation])));
         var agent = new ChiefOfStaffAgent(
             NullLogger<ChiefOfStaffAgent>.Instance,
             new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
@@ -912,8 +882,7 @@ What type of business are you building?
             organizationId.ToString("D"),
             installationId.ToString("D"),
             new AgentIdentity(
-                chiefId.ToString("D"), "Chief", null, "Chief of Staff", null, [], null,
-                ownerId.ToString("D"), "Owner"));
+                chiefId.ToString("D"), "Chief", null, "Chief of Staff", null, [], null, null, null));
 
         var result = await agent.HandlePersonalTodoAsync(item, context, CancellationToken.None);
 
@@ -921,13 +890,6 @@ What type of business are you building?
             PersonalTodoResult.InProgress(
                 "Awaiting the manager's review and hiring action for Product Manager."),
             result);
-        Assert.NotNull(sent);
-        Assert.Equal(chatId, sent.ChatId);
-        Assert.Contains("Product Manager", sent.Content, StringComparison.Ordinal);
-        Assert.Contains("Doing", sent.Content, StringComparison.Ordinal);
-        Assert.NotNull(suggested);
-        Assert.Equal(recommendation.Id,
-            suggested.Parameters.GetProperty("recommendationId").GetGuid());
     }
 
     [Fact]

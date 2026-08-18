@@ -11,11 +11,12 @@ It loads authoritative business, finance, organization, operating-pattern, manag
 - User-message and management-review events are durable work.
 - Assistant streaming is reported as durable progress; the callback terminal result completes work.
 - Onboarding is acknowledged only after its communication side effect succeeds.
-- Hiring recommendations are mirrored to the Chief's own sequenced personal board. The priority
-  role moves into Doing while the Chief messages its manager with a Marketplace action; fulfillment
-  moves that ticket to Done and activates the next Backlog role.
+- The deterministic runtime mirrors hiring recommendations to the Chief's own sequenced personal
+  board. The priority role moves into Doing silently after the original recommendation and
+  Marketplace action; fulfillment moves that ticket to Done and activates the next Backlog role.
 - Company mutations use explicit platform capabilities and their approval/idempotency rules.
-- Model tools are loaded from the live grant revision.
+- Model tools are loaded from the live grant revision, excluding runtime-owned personal-task
+  creation and suggested-action capabilities.
 - Provider and service credentials never enter the process.
 - CEO-approved Product Manager resource-change events retain the lead-authored reporting lines,
   are administratively reconciled into the Chief-owned hiring backlog, and are summarized to the CEO in one
