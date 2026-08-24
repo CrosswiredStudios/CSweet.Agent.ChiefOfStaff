@@ -176,19 +176,18 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
         var startedAt = DateTimeOffset.UtcNow;
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var sequence = 0;
-
-        await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
+        await using var turnStream = context.CreateTurnStream(
             conversationId,
-            sequence++,
+            incoming.TurnId,
+            incoming.Attempt);
+
+        await turnStream.ActivityStartedAsync(
             "Chief of Staff accepted the request.",
-            IsFinal: false,
-            TurnId: incoming.TurnId,
-            Kind: "progress",
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["stage"] = "accepted"
             },
-            Attempt: incoming.Attempt), cancellationToken);
+            cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff received user message event {EventId} for conversation {ConversationId}. Provider {ProviderProfileId}. MessageLength {MessageLength}.",
@@ -218,13 +217,37 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
                     usage.Add(update.Usage);
                 }
 
-                if (string.IsNullOrEmpty(update.Delta))
+                foreach (var activity in update.Activities ?? [])
                 {
-                    continue;
+                    if (activity.Kind == AgentTurnStreamKinds.ActivityStarted)
+                        await turnStream.ActivityStartedAsync(activity.Title, activity.Metadata, cancellationToken);
+                    else if (activity.Kind == AgentTurnStreamKinds.ActivityCompleted)
+                        await turnStream.ActivityCompletedAsync(activity.Title, activity.Metadata, cancellationToken);
+                    else
+                        await turnStream.ActivityFailedAsync(activity.Title, activity.Metadata, cancellationToken);
                 }
 
-                builder.Append(update.Delta);
+                if (update.StartsNewDraft)
+                {
+                    builder.Clear();
+                    await turnStream.ResetDraftAsync(
+                        "The model started a consolidated draft after using a tool.",
+                        cancellationToken);
+                }
+
+                if (!string.IsNullOrEmpty(update.ReasoningDelta))
+                {
+                    await turnStream.WriteReasoningAsync(update.ReasoningDelta, cancellationToken);
+                }
+
+                if (!string.IsNullOrEmpty(update.Delta))
+                {
+                    builder.Append(update.Delta);
+                    await turnStream.WriteDraftAsync(update.Delta, cancellationToken);
+                }
             }
+
+            await turnStream.CompleteReasoningAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -237,15 +260,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
                 "Chief of Staff failed to generate a response for conversation {ConversationId}.",
                 conversationId);
 
-            await PublishAgentErrorAsync(
-                context,
-                message.EventId,
-                conversationId,
-                sequence,
-                BuildSafeFailureMessage(exception),
-                incoming.TurnId,
-                incoming.Attempt,
-                cancellationToken);
+            await turnStream.FailAsync(BuildSafeFailureMessage(exception), cancellationToken);
             await WriteRunLogAsync(
                 incoming.ProviderProfileId,
                 incoming.Message,
@@ -266,14 +281,8 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
                 "Chief of Staff generated an empty response for conversation {ConversationId}.",
                 conversationId);
 
-            await PublishAgentErrorAsync(
-                context,
-                message.EventId,
-                conversationId,
-                sequence,
+            await turnStream.FailAsync(
                 "The Chief of Staff could not complete the request because the model provider returned an empty response.",
-                incoming.TurnId,
-                incoming.Attempt,
                 cancellationToken);
             await WriteRunLogAsync(
                 incoming.ProviderProfileId,
@@ -288,6 +297,17 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             return;
         }
 
+        if (!string.Equals(response, builder.ToString(), StringComparison.Ordinal))
+        {
+            await turnStream.ResetDraftAsync(
+                "The Chief of Staff response policy replaced the provisional draft.",
+                cancellationToken);
+            await turnStream.WriteDraftAsync(response, cancellationToken);
+        }
+
+        await turnStream.ActivityStartedAsync(
+            "Validating executive follow-up actions.",
+            cancellationToken: cancellationToken);
         await EnsureDefaultProductManagerRecommendationAsync(
             response,
             $"user-message:{message.EventId:N}",
@@ -300,6 +320,9 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
                 : null,
             incoming.MessageId == Guid.Empty ? null : incoming.MessageId,
             cancellationToken);
+        await turnStream.ActivityCompletedAsync(
+            "Validated executive follow-up actions.",
+            cancellationToken: cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff publishing validated response for conversation {ConversationId}. Sequence {Sequence}. ResponseLength {ResponseLength}.",
@@ -307,22 +330,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             sequence,
             response.Length);
 
-        await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
-            conversationId,
-            sequence++,
-            response,
-            IsFinal: false,
-            TurnId: incoming.TurnId,
-            Attempt: incoming.Attempt), cancellationToken);
-
-        await PublishChunkAsync(context, message.EventId, new AssistantResponseChunk(
-            conversationId,
-            sequence,
-            Delta: string.Empty,
-            IsFinal: true,
-            TurnId: incoming.TurnId,
-            Kind: "final",
-            Attempt: incoming.Attempt), cancellationToken);
+        await turnStream.CommitAsync(response, cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed streaming for conversation {ConversationId}. Chunks {ChunkCount}. ResponseLength {ResponseLength}.",
@@ -1462,7 +1470,11 @@ Use exactly one path: recommendation or clarification. If you identify a first m
                 ChatOptions = new ChatOptions
                 {
                     Instructions = ChiefOfStaffProfile.SystemPrompt,
-                    Tools = tools
+                    Tools = tools,
+                    Reasoning = new ReasoningOptions
+                    {
+                        Output = ReasoningOutput.Full
+                    }
                 },
                 AIContextProviders = useAgentMemory ? [memoryProvider] : []
             });
@@ -1497,16 +1509,50 @@ Use exactly one path: recommendation or clarification. If you identify a first m
             capability,
             prompt.Length);
 
+        var modelActivities = new Dictionary<string, (string Name, System.Diagnostics.Stopwatch Stopwatch)>(StringComparer.Ordinal);
         await foreach (var update in agent.RunStreamingAsync(prompt, session, options: null, cancellationToken))
         {
             var usage = ExtractUsage(update.Contents);
+            var reasoningDelta = string.Concat(
+                update.Contents.OfType<TextReasoningContent>().Select(content => content.Text));
+            var startsNewDraft = update.Contents.Any(content => content is FunctionCallContent);
+            var activities = new List<AssistantActivityUpdate>();
+            foreach (var call in update.Contents.OfType<FunctionCallContent>())
+            {
+                modelActivities[call.CallId] = (call.Name, System.Diagnostics.Stopwatch.StartNew());
+                activities.Add(new AssistantActivityUpdate(
+                    AgentTurnStreamKinds.ActivityStarted,
+                    $"Calling {call.Name}",
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["tool"] = call.Name,
+                        ["callId"] = call.CallId,
+                        ["input"] = JsonSerializer.Serialize(call.Arguments)
+                    }));
+            }
+            foreach (var result in update.Contents.OfType<FunctionResultContent>())
+            {
+                var activity = modelActivities.Remove(result.CallId, out var started)
+                    ? started
+                    : ("model tool", System.Diagnostics.Stopwatch.StartNew());
+                activities.Add(new AssistantActivityUpdate(
+                    AgentTurnStreamKinds.ActivityCompleted,
+                    $"Completed {activity.Item1}",
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["tool"] = activity.Item1,
+                        ["callId"] = result.CallId,
+                        ["durationMs"] = activity.Item2.ElapsedMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["output"] = JsonSerializer.Serialize(result.Result)
+                    }));
+            }
             if (!string.IsNullOrEmpty(update.Text))
             {
-                yield return new AssistantStreamUpdate(update.Text, usage);
+                yield return new AssistantStreamUpdate(update.Text, reasoningDelta, usage, startsNewDraft, activities);
             }
-            else if (usage is not null)
+            else if (usage is not null || !string.IsNullOrEmpty(reasoningDelta) || startsNewDraft || activities.Count > 0)
             {
-                yield return new AssistantStreamUpdate(string.Empty, usage);
+                yield return new AssistantStreamUpdate(string.Empty, reasoningDelta, usage, startsNewDraft, activities);
             }
         }
     }
@@ -1821,5 +1867,15 @@ Use exactly one path: recommendation or clarification. If you identify a first m
         return usage;
     }
 
-    private sealed record AssistantStreamUpdate(string Delta, UsageDetails? Usage);
+    private sealed record AssistantStreamUpdate(
+        string Delta,
+        string ReasoningDelta,
+        UsageDetails? Usage,
+        bool StartsNewDraft = false,
+        IReadOnlyList<AssistantActivityUpdate>? Activities = null);
+
+    private sealed record AssistantActivityUpdate(
+        string Kind,
+        string Title,
+        IReadOnlyDictionary<string, string> Metadata);
 }
