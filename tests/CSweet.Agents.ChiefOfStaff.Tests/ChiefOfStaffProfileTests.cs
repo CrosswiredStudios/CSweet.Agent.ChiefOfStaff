@@ -472,7 +472,8 @@ What type of business are you building?
         Assert.Contains("**Modify: Game Designer**", brief);
         Assert.Contains("**Remove: Legacy Generalist**", brief);
         Assert.Contains("candidate-free hiring suggestions", brief, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Product Manager-authored", brief, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(request.RequesterOrganizationUserId.ToString("D"), brief, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(request.ManagerOrganizationUserId.ToString("D"), brief, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("administered by the Chief", brief, StringComparison.OrdinalIgnoreCase);
     }
 

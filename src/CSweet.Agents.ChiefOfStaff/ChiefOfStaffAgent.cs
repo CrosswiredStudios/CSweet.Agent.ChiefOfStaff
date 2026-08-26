@@ -803,7 +803,11 @@ impossible, or denied. Otherwise perform the task and return a concise completio
     internal static string BuildResourceChangeManagerBrief(ResourceChangeRequestResponse request)
     {
         var content = new StringBuilder();
-        content.Append("CEO-approved, Product Manager-authored staffing update for **")
+        content.Append("Manager-approved staffing update requested by organization user `")
+            .Append(request.RequesterOrganizationUserId.ToString("D"))
+            .Append("` and managed by organization user `")
+            .Append(request.ManagerOrganizationUserId.ToString("D"))
+            .Append("` for **")
             .Append(request.ProductGoal)
             .AppendLine("**")
             .AppendLine();
