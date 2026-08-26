@@ -152,7 +152,10 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains(AgentConfigurationCapabilities.Update, provides);
         var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Select(x => x.GetProperty("key").GetString()).ToList();
-        Assert.Equal(["llmProviderId", "llmModel", "responseTone", "proactivePlanning", "maxPlanItems"], configurationKeys);
+        Assert.Equal([
+            "llmProviderId", "llmModel", "businessOperatingProfile", "customBusinessDescription",
+            "responseTone", "proactivePlanning", "maxPlanItems", "maxAlternatives", "customInstructions"
+        ], configurationKeys);
         Assert.Contains(PlatformCapabilities.BusinessProfileRead, requires);
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
         Assert.Contains(AgentCatalogCapabilities.Search, requires);
@@ -176,7 +179,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("near 120 words", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not act as a subject-matter expert", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("durable personal to-do list", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("one-line CEO-direct manager map", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CEO-direct managerial shape", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("only the highest-priority unfilled role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never print, describe, or imitate a tool call", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ask one concise plain-text question instead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -185,7 +188,9 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("defer the recommendation to the appropriate product or functional lead", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("clearly overrides this boundary", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("These suggestions remain the lead's recommendations", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Product Manager as the default priority-one hire", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Do not assume a Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("native bounded-choice widget", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("one proactive hiring recommendation at a time", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deterministic Chief runtime mirrors", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not call `add_personal_todo`", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -273,7 +278,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Trailwise", message);
         Assert.Contains("Outdoor recreation", message);
         Assert.Contains("Make expert-led outdoor experiences accessible", message);
-        Assert.Contains("Product Manager as the priority-one hire", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("leadership coverage", message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("who is the first specific customer", message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("?", message, StringComparison.Ordinal);
         Assert.DoesNotContain("what you're building", message, StringComparison.OrdinalIgnoreCase);
@@ -419,9 +424,10 @@ What type of business are you building?
         var fallback = ChiefOfStaffOrchestrator.BuildContextualOnboardingFallback(context);
 
         Assert.True(ChiefOfStaffOrchestrator.IsProductDrivenBusiness(profile));
-        Assert.Contains("Product Manager as the priority-one hire", prompt);
-        Assert.Contains("Product Manager as the priority-one hire", fallback);
-        Assert.Contains("Browse Marketplace candidates", fallback);
+        Assert.Contains("Business operating profile: General", prompt);
+        Assert.DoesNotContain("Product Manager as the priority-one hire", prompt);
+        Assert.DoesNotContain("Product Manager as the priority-one hire", fallback);
+        Assert.DoesNotContain("Browse Marketplace candidates", fallback);
     }
 
     [Theory]

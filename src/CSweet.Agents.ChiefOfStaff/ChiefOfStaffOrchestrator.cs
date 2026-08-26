@@ -53,24 +53,14 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
         var maxItems = settings.GetDecimal("maxPlanItems") is { } value ? (int)value : 3;
         var maxAlternatives = settings.GetDecimal("maxAlternatives") is { } alternativeValue ? (int)alternativeValue : 2;
         var custom = settings.GetString("customInstructions");
-        var productLeadershipDefault =
-            IsProductDrivenBusiness(context.BusinessProfile) &&
-            !HasActiveProductManager(context.Organization)
-                ? """
-
-Authoritative staffing default: this is a product-driven business with no active Product Manager.
-Recommend Product Manager as the priority-one hire unless a hard budget, approval, or safety
-constraint prevents hiring. Use search_workforce for current staff or human candidates. Use
-get_available_agents for installed, local-directory, first-party, and marketplace agents with
-product.strategy, product.discovery, product.roadmap, and product-management.plan.v1 before
-recommending a specific candidate.
-"""
-                : string.Empty;
+        var profile = BusinessOperatingProfiles.Resolve(settings);
+        var customBusiness = settings.GetString(BusinessOperatingProfiles.CustomDescriptionKey);
         return $$"""
 {{operatingInstruction}}
 Response tone: {{tone}}. Never propose more than {{maxItems}} primary plan items or {{maxAlternatives}} alternatives.
+Business operating profile: {{profile.Label}}. {{profile.PromptOverlay}}
+{{(profile.Key == "custom" && !string.IsNullOrWhiteSpace(customBusiness) ? $"Custom business context: {customBusiness}" : string.Empty)}}
 {{(string.IsNullOrWhiteSpace(custom) ? string.Empty : $"Owner configuration: {custom}")}}
-{{productLeadershipDefault}}
 
 <authoritative_operating_context>
 {{JsonSerializer.Serialize(context, JsonOptions)}}
@@ -274,9 +264,6 @@ OWNER MESSAGE:
             ? $"I've reviewed the current profile for {profile.Name}."
             : $"I've reviewed {profile.Name}, {string.Join(" ", identity)}.";
 
-        if (IsProductDrivenBusiness(profile) && !HasActiveProductManager(context.Organization))
-            return $"{understood} This is a product-driven business, so I recommend a Product Manager as the priority-one hire to own customer discovery, product outcomes, strategy, and the product-team plan. Browse Marketplace candidates when you're ready to review the role.";
-
         var hasStaffingSignal =
             !string.IsNullOrWhiteSpace(profile.BusinessType) ||
             !string.IsNullOrWhiteSpace(profile.Industry) ||
@@ -285,7 +272,7 @@ OWNER MESSAGE:
             profile.TargetCustomers.Count > 0 ||
             profile.Offerings.Count > 0;
         return hasStaffingSignal
-            ? $"{understood} There is enough business context to identify the CEO-direct manager accountable for that mission; that manager will own the subordinate team design."
+            ? $"{understood} I can help establish the leadership coverage this business needs, one decision at a time."
             : $"{understood} What type of business are you building, and what outcome should it deliver for customers?";
     }
 

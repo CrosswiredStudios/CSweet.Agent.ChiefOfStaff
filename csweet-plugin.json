@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "1.16.1",
+  "version": "1.17.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -90,13 +90,25 @@
   "configuration": [
     { "key": "llmProviderId", "type": "provider", "label": "LLM provider", "required": true, "secret": false },
     { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false, "dependsOnFieldKey": "llmProviderId" },
+    { "key": "businessOperatingProfile", "type": "select", "label": "Business operating profile", "required": true, "secret": false, "defaultValue": "general", "description": "Applies business-type organizational defaults while preserving the Chief's core boundaries.", "options": [
+      { "value": "general", "label": "General" },
+      { "value": "game-studio", "label": "Game Studio" },
+      { "value": "saas", "label": "SaaS" },
+      { "value": "ecommerce", "label": "E-commerce" },
+      { "value": "professional-services", "label": "Professional Services" },
+      { "value": "media-content", "label": "Media & Content" },
+      { "value": "custom", "label": "Custom" }
+    ] },
+    { "key": "customBusinessDescription", "type": "textarea", "label": "Custom business description", "required": false, "secret": false, "description": "Optional organizational context used when the Custom operating profile is selected." },
     { "key": "responseTone", "type": "select", "label": "Response tone", "required": true, "secret": false, "defaultValue": "concise", "options": [
       { "value": "concise", "label": "Concise" },
       { "value": "balanced", "label": "Balanced" },
       { "value": "detailed", "label": "Detailed" }
     ] },
     { "key": "proactivePlanning", "type": "boolean", "label": "Proactive planning", "required": true, "secret": false, "defaultValue": true },
-    { "key": "maxPlanItems", "type": "number", "label": "Maximum plan items", "required": true, "secret": false, "defaultValue": 10, "minimum": 3, "maximum": 20, "step": 1 }
+    { "key": "maxPlanItems", "type": "number", "label": "Maximum plan items", "required": true, "secret": false, "defaultValue": 3, "minimum": 3, "maximum": 20, "step": 1 },
+    { "key": "maxAlternatives", "type": "number", "label": "Maximum alternatives", "required": true, "secret": false, "defaultValue": 2, "minimum": 0, "maximum": 2, "step": 1 },
+    { "key": "customInstructions", "type": "textarea", "label": "Custom instructions", "required": false, "secret": false }
   ],
   "credentials": [],
   "webAccess": { "mode": "None", "rules": [] },

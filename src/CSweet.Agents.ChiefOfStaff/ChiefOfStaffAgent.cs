@@ -67,6 +67,18 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
                 required: true,
                 description: "Selects the chat model to use from the chosen provider profile.")
             .Select(
+                BusinessOperatingProfiles.ConfigurationKey,
+                "Business Operating Profile",
+                BusinessOperatingProfiles.ConfigurationOptions,
+                required: true,
+                description: "Applies business-type organizational defaults while preserving the Chief's core boundaries.",
+                defaultValue: BusinessOperatingProfiles.GeneralKey)
+            .TextArea(
+                BusinessOperatingProfiles.CustomDescriptionKey,
+                "Custom Business Description",
+                description: "Optional organizational context used when the Custom operating profile is selected.",
+                placeholder: "Describe the business model and any unusual organizational needs.")
+            .Select(
                 "responseTone",
                 "Response Tone",
                 [
@@ -532,37 +544,119 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             !string.Equals(context.BusinessId, onboarding.OrganizationId.ToString("D"), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The onboarding event identity is invalid for this Chief of Staff instance.");
 
-        var openingMessage = await GenerateOnboardingMessageAsync(
-            onboarding,
-            eventId,
-            context,
-            cancellationToken);
-        await EnsureDefaultProductManagerRecommendationAsync(
-            openingMessage,
-            $"agent-onboarded:{eventId:N}",
-            context,
-            cancellationToken);
-        await SyncHiringPersonalTodosAsync(
-            context, null, null, cancellationToken);
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var profile = BusinessOperatingProfiles.Resolve(Settings);
+        var openingMessage = BuildFocusOnboardingMessage(operatingContext, profile);
+        await EnsureLeadershipCoverageAgendaAsync(profile, context, cancellationToken);
         var openingMessageId = await SendCommunicationMessageAsync(
             onboarding.ConversationId,
             openingMessage,
             $"agent-onboarded:{eventId:N}",
             context,
             cancellationToken);
+        await AttachOnboardingFocusDecisionAsync(
+            onboarding.ConversationId,
+            openingMessageId,
+            profile,
+            $"agent-onboarded:{eventId:N}:focus",
+            context,
+            cancellationToken);
         _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
             message,
-            cancellationToken);
-        await AttachTopHiringActionAsync(
-            openingMessageId,
-            $"agent-onboarded:{eventId:N}",
-            context,
             cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
             eventId,
             onboarding.ConversationId);
+    }
+
+    internal static string BuildFocusOnboardingMessage(
+        ChiefOperatingContext context,
+        BusinessOperatingProfile profile)
+    {
+        var business = context.BusinessProfile;
+        if (business is null)
+            return $"I’m ready to help shape the company using the {profile.Label} operating profile. Choose the area where you want to focus first.";
+
+        var details = new List<string>();
+        if (!string.IsNullOrWhiteSpace(business.Industry)) details.Add($"in {business.Industry.Trim()}");
+        if (!string.IsNullOrWhiteSpace(business.Mission)) details.Add($"with the mission “{business.Mission.Trim()}”");
+        else if (!string.IsNullOrWhiteSpace(business.Description)) details.Add(business.Description.Trim());
+        var understood = details.Count == 0
+            ? $"I’ve reviewed the business profile for {business.Name}."
+            : $"I’ve reviewed {business.Name}, {string.Join(" ", details)}.";
+        return $"{understood} I’ll help establish the leadership coverage the company needs without overloading you with a full organization plan. Choose the area where you want to focus first.";
+    }
+
+    private async Task AttachOnboardingFocusDecisionAsync(
+        Guid conversationId,
+        Guid messageId,
+        BusinessOperatingProfile profile,
+        string idempotencyKey,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var options = profile.FocusOptions
+                .Select(x => new RequestUserInputOption(x.Id, x.Label, x.Description))
+                .ToList();
+            _ = await context.Platform.InvokeAsync<RequestUserInputRequest, RequestUserInputResponse>(
+                ChiefOfStaffProfile.RequestUserInputCapability,
+                new RequestUserInputRequest(
+                    conversationId,
+                    null,
+                    messageId,
+                    "Where would you like the company to focus first?",
+                    options,
+                    options[0].Id,
+                    idempotencyKey),
+                cancellationToken);
+        }
+        catch (PlatformCapabilityException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not attach the onboarding focus decision to message {MessageId}.",
+                messageId);
+        }
+    }
+
+    private async Task EnsureLeadershipCoverageAgendaAsync(
+        BusinessOperatingProfile profile,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
+            throw new InvalidOperationException("The Chief of Staff employee identity is unavailable.");
+        var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
+        var existing = directory.Boards
+            .SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId)?
+            .Items.Select(x => x.CorrelationId)
+            .Where(x => x is not null)
+            .ToHashSet(StringComparer.Ordinal) ?? [];
+
+        foreach (var item in profile.LeadershipCoverage)
+        {
+            var correlationId = $"leadership-coverage:{profile.Key}:{item.Id}";
+            if (existing.Contains(correlationId)) continue;
+            _ = await context.Platform.PersonalTodo.AddAsync(
+                new AddPersonalTodoItemRequest(
+                    item.Title,
+                    item.Description,
+                    WorkPriorities.Medium,
+                    null,
+                    $"leadership-coverage:{profile.Key}:{item.Id}:personal-todo",
+                    null,
+                    null,
+                    null,
+                    correlationId)
+                {
+                    StartInBacklog = true
+                },
+                cancellationToken);
+        }
     }
 
     private async Task HandleResourceChangeRequestedAsync(
@@ -1161,68 +1255,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             .ToLowerInvariant()
             .Where(char.IsLetterOrDigit)
             .ToArray());
-    }
-
-    private async Task<string> GenerateOnboardingMessageAsync(
-        AgentOnboardedEvent onboarding,
-        Guid eventId,
-        AgentRuntimeContext context,
-        CancellationToken cancellationToken)
-    {
-        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
-        var fallback = ChiefOfStaffOrchestrator.BuildContextualOnboardingFallback(operatingContext);
-        var providerProfileId = Settings.GetGuid("llmProviderId");
-        if (providerProfileId is null || providerProfileId == Guid.Empty)
-        {
-            _logger.LogWarning(
-                "Chief of Staff onboarding used the contextual fallback because no LLM provider is configured for installation {InstallationId}.",
-                context.InstallationId);
-            return fallback;
-        }
-
-        const string onboardingRequest = """
-This is your first message after being hired into this business. Review the authoritative business, financial, organization, and hiring-backlog context before responding.
-
-Do not use a generic welcome or ask the owner to repeat facts already present in the business profile. If the available data is sufficient, give a brief business-specific assessment, name the compact CEO-direct manager map, identify the single most important accountable manager to fill first and why, and begin the normal ranked-hiring-backlog workflow. Do not originate subordinate specialist recommendations; the selected manager owns creation of that team. If the available data is insufficient to choose the first manager responsibly, state what you already understand and ask only the single highest-value clarification. Do not use a multi-part intake questionnaire.
-Use exactly one path: recommendation or clarification. If you identify a first managerial hire, update or mention the hiring backlog, or suggest a Marketplace action, do not ask any question in that message. Missing details that would merely refine an already supportable recommendation are not a reason to ask. Ask only when one missing fact makes the first-manager decision impossible, and then provide no recommendation or suggested action.
-""";
-
-        try
-        {
-            var response = await GenerateResponseAsync(
-                new AssistantCapabilityInput(
-                    providerProfileId.Value,
-                    onboarding.ConversationId.ToString("D"),
-                    onboardingRequest,
-                    new Dictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["userId"] = onboarding.HiringOrganizationUserId.ToString("D"),
-                        ["onboardingEventId"] = eventId.ToString("D")
-                    },
-                    onboarding.HiringOrganizationUserId.ToString("D")),
-                ChiefOfStaffProfile.ConverseCapability,
-                context,
-                cancellationToken,
-                operatingContext);
-
-            if (!string.IsNullOrWhiteSpace(response.Response))
-            {
-                return FormatOnboardingMessage(response.Response);
-            }
-
-            _logger.LogWarning(
-                "Chief of Staff onboarding generation returned no content for installation {InstallationId}.",
-                context.InstallationId);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(
-                exception,
-                "Chief of Staff onboarding generation failed for installation {InstallationId}; using contextual fallback.",
-                context.InstallationId);
-        }
-
-        return fallback;
     }
 
     internal static string FormatOnboardingMessage(string value)

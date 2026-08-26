@@ -53,6 +53,19 @@ public sealed record ProposedAction(
     string ParametersJson,
     bool RequiresApproval);
 
+internal sealed record RequestUserInputOption(string Id, string Label, string? Description = null);
+
+internal sealed record RequestUserInputRequest(
+    Guid ConversationId,
+    Guid? ChatTurnId,
+    Guid? ConversationMessageId,
+    string Prompt,
+    IReadOnlyList<RequestUserInputOption> Options,
+    string RecommendedOptionId,
+    string IdempotencyKey);
+
+internal sealed record RequestUserInputResponse(Guid Id);
+
 public sealed record AssistantResponseChunk(
     string ConversationId,
     int Sequence,

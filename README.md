@@ -11,6 +11,11 @@ It loads authoritative business, finance, organization, operating-pattern, manag
 - User-message and management-review events are durable work.
 - Assistant streaming is reported as durable progress; the callback terminal result completes work.
 - Onboarding is acknowledged only after its communication side effect succeeds.
+- Business onboarding selects a General, Game Studio, SaaS, E-commerce, Professional Services,
+  Media & Content, or Custom operating profile. The first Chief message reflects the saved
+  business profile and presents a native bounded focus choice instead of assuming a first hire.
+- The runtime seeds a profile-aware leadership-coverage agenda in Backlog. It exposes one focus or
+  hiring decision at a time, while CEO requests and active hiring work take precedence.
 - The deterministic runtime mirrors hiring recommendations to the Chief's own sequenced personal
   board. The priority role moves into Doing silently after the original recommendation and
   Marketplace action; fulfillment moves that ticket to Done and activates the next Backlog role.
