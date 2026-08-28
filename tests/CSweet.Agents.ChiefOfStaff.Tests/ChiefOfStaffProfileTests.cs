@@ -130,6 +130,7 @@ public sealed class ChiefOfStaffProfileTests
         var manifest = await AgentManifestLoader.LoadAsync(manifestPath, CancellationToken.None);
 
         Assert.Equal(ChiefOfStaffProfile.AgentId, manifest.Id);
+        Assert.Contains(WorkforceEvents.Changed, manifest.Events.Subscribes);
     }
 
     [Fact]

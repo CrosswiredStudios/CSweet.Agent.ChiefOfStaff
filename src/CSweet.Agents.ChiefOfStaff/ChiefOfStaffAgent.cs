@@ -122,8 +122,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             "com.csweet.action.rejected.v1" or
             "com.csweet.approval.completed.v1" or
             ManagementEvents.WorkstreamChanged or
-            ManagementEvents.WorkforcePlanDecided)
+            ManagementEvents.WorkforcePlanDecided or
+            WorkforceEvents.Changed)
         {
+            if (string.Equals(message.EventType, WorkforceEvents.Changed, StringComparison.Ordinal))
+                await ReconcileGameStudioCreativeOwnershipAsync(message.EventId, context, cancellationToken);
             await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
             return;
         }
@@ -250,6 +253,9 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
         }
 
         var response = EnforceResponseMode(builder.ToString());
+        var requestedWorkstreamId = TryGetWorkstreamId(incoming.Context);
+        response = await ApplyGameStudioOwnershipGuardAsync(
+            response, requestedWorkstreamId, context, cancellationToken);
         if (string.IsNullOrWhiteSpace(response))
         {
             _logger.LogWarning(
@@ -285,6 +291,7 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             cancellationToken: cancellationToken);
         await EnsureDefaultProductManagerRecommendationAsync(
             response,
+            requestedWorkstreamId,
             $"user-message:{message.EventId:N}",
             context,
             cancellationToken);
@@ -793,7 +800,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         }
 
         content.AppendLine()
-            .Append("Added and increased roles are now candidate-free hiring suggestions administered by the Chief on behalf of the Product Manager. ")
+            .Append("Added and increased roles are now candidate-free hiring suggestions administered by the Chief on behalf of the requesting functional lead. ")
             .Append("Marketplace review, spending, installation, and each hire remain separately approved.");
         return content.ToString();
     }
@@ -875,6 +882,19 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         await ResumeFulfilledHiringTodoAsync(
             fulfilled.RecommendationId, context, cancellationToken);
 
+        if (string.Equals(
+                BusinessOperatingProfiles.Resolve(Settings).Key,
+                "game-studio",
+                StringComparison.Ordinal) &&
+            GameStudioOwnershipPolicy.IsCreativeDirectorRole(fulfilled.RoleKey, fulfilled.RoleTitle))
+        {
+            await WithdrawConflictingChiefProductManagerRecommendationsAsync(
+                fulfilled.WorkstreamId,
+                $"creative-director-fulfilled:{message.EventId:N}",
+                context,
+                cancellationToken);
+        }
+
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         var next = backlog.Recommendations
             .OrderBy(x => x.Priority)
@@ -904,6 +924,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
 
     private async Task EnsureDefaultProductManagerRecommendationAsync(
         string response,
+        Guid? workstreamId,
         string idempotencyPrefix,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
@@ -915,14 +936,17 @@ impossible, or denied. Otherwise perform the task and return a concise completio
 
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         if (backlog.Recommendations.Any(x =>
-                NormalizeRoleIdentity(x.Title) == "productmanager"))
+                GameStudioOwnershipPolicy.IsProductManager(x) &&
+                (workstreamId is { } scope
+                    ? x.WorkstreamId == scope
+                    : x.WorkstreamId is null)))
             return;
 
         _ = await context.Platform.UpsertHiringRecommendationAsync(
             new UpsertHiringRecommendationRequest(
                 "Product Manager",
                 "Own customer discovery, product outcomes, strategy, roadmap, prioritization, requirements, and product-team design.",
-                null,
+                workstreamId,
                 [],
                 null,
                 $"{idempotencyPrefix}:recommendation:product-manager")
@@ -932,6 +956,91 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 Headcount = 1
             },
             cancellationToken);
+    }
+
+    private async Task<string> ApplyGameStudioOwnershipGuardAsync(
+        string response,
+        Guid? requestedWorkstreamId,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(
+                BusinessOperatingProfiles.Resolve(Settings).Key,
+                "game-studio",
+                StringComparison.Ordinal) ||
+            !SplitResponseSegments(response).Any(segment =>
+                segment.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) &&
+                IsHiringRecommendationLine(segment)))
+            return response;
+
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        var decision = GameStudioOwnershipPolicy.Assess(
+            operatingContext.Organization,
+            operatingContext.HiringBacklog,
+            requestedWorkstreamId);
+        return EnforceGameStudioProductManagerOwnership(response, decision);
+    }
+
+    internal static string EnforceGameStudioProductManagerOwnership(
+        string response,
+        ProductManagerOwnershipDecision decision) => decision switch
+        {
+            ProductManagerOwnershipDecision.DelegateToCreativeDirector =>
+                "Creative and product-team design for this game is delegated to your Creative Director. I will not create a CEO-direct Product Manager recommendation; the Creative Director's governed staffing plan will return to you for approval.",
+            ProductManagerOwnershipDecision.ClarifyProject =>
+                "I see multiple active game projects and cannot safely assign product-team ownership from the current context. Which game project does the Creative Director own?",
+            _ => response
+        };
+
+    private async Task ReconcileGameStudioCreativeOwnershipAsync(
+        Guid eventId,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(
+                BusinessOperatingProfiles.Resolve(Settings).Key,
+                "game-studio",
+                StringComparison.Ordinal))
+            return;
+
+        await WithdrawConflictingChiefProductManagerRecommendationsAsync(
+            null,
+            $"workforce-changed:{eventId:N}",
+            context,
+            cancellationToken);
+    }
+
+    private async Task WithdrawConflictingChiefProductManagerRecommendationsAsync(
+        Guid? creativeDirectorWorkstreamId,
+        string idempotencyPrefix,
+        AgentRuntimeContext context,
+        CancellationToken cancellationToken)
+    {
+        var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
+        if (operatingContext.HiringBacklog is null) return;
+
+        foreach (var recommendation in operatingContext.HiringBacklog.Recommendations.Where(x =>
+                     GameStudioOwnershipPolicy.IsConflictingChiefProductManager(
+                         x, operatingContext.Organization, creativeDirectorWorkstreamId)))
+        {
+            _ = await context.Platform.WithdrawHiringRecommendationAsync(
+                new WithdrawHiringRecommendationRequest(
+                    recommendation.Id,
+                    "Creative Director ownership now governs product-team design for this game project.",
+                    $"{idempotencyPrefix}:withdraw:{recommendation.Id:N}"),
+                cancellationToken);
+        }
+    }
+
+    private static Guid? TryGetWorkstreamId(IReadOnlyDictionary<string, string>? context)
+    {
+        if (context is null) return null;
+        foreach (var key in new[] { "workstreamId", "workstream_id", "projectWorkstreamId" })
+        {
+            if (context.TryGetValue(key, out var value) && Guid.TryParse(value, out var id))
+                return id;
+        }
+        return null;
     }
 
     private async Task SyncHiringPersonalTodosAsync(

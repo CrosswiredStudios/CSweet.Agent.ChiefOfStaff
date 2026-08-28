@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `2.0.0` and manifest protocol `2.0`.
+package version `2.1.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 3.22.0; manifest-audit tests reject names missing from that catalog.
@@ -72,8 +72,8 @@ policy at runtime.
 | `platform.management.resource-change.decide.v1` | organization | Decide a request only when this Chief is the requester's current manager. |
 | `platform.user-action.suggest.v1` | organization | Attach a platform-resolved Marketplace action to a Chief message. |
 
-These administrative grants are Chief-owned. Product Manager installations deliberately do not
-receive them, but retain authorship of their team designs. CEO-approved Product Manager resource
+These administrative grants are Chief-owned. Functional-lead installations deliberately do not
+receive them, but retain authorship of their team designs. Manager-approved functional-lead resource
 changes are reconciled into one candidate-free recommendation per added or increased role. The
 Chief sends the CEO one idempotent combined brief for the
 complete change set and creates one separately actionable Marketplace CTA system message per new
@@ -97,6 +97,8 @@ those CTA messages.
 | `communication.chat.create.v1` | organization | Open or reuse the direct chat with the Chief's current manager. |
 | `communication.message.send.v1` | organization | Send messages to conversations in which the Chief is a participant. |
 | `agent.onboarding.complete.v1` | organization | Acknowledge this installation's durable onboarding event after its initial manager message is complete. |
+
+The agent also subscribes to `com.csweet.workforce.changed.v1` so firing, rehiring, and reporting-line changes immediately refresh game-project ownership and remove only conflicting Chief-authored recommendations.
 
 ### Product Manager collaboration
 

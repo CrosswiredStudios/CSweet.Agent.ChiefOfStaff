@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -84,6 +84,7 @@
       "com.csweet.management.resource-change.decided.v1",
       "com.csweet.workstream.changed.v1",
       "com.csweet.workforce-plan.decided.v1",
+      "com.csweet.workforce.changed.v1",
       "com.csweet.hiring-recommendation.fulfilled.v1"
     ]
   },
