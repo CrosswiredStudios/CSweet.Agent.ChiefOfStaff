@@ -49,18 +49,13 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
             ChiefOfStaffProfile.PlanWorkCapability => "Create an organization and workforce plan with accountable manager roles, required capabilities, reporting structure, hiring order, budget implications, and approval points. Do not plan the underlying domain execution.",
             _ => "Answer only within organizational design and workforce planning and use the authoritative context. Ask a clarification only when no responsible staffing recommendation can be made without it. Never ask and recommend or suggest an action in the same response."
         };
-        var tone = settings.GetString("responseTone") ?? "concise";
-        var maxItems = settings.GetDecimal("maxPlanItems") is { } value ? (int)value : 3;
-        var maxAlternatives = settings.GetDecimal("maxAlternatives") is { } alternativeValue ? (int)alternativeValue : 2;
-        var custom = settings.GetString("customInstructions");
         var profile = BusinessOperatingProfiles.Resolve(settings);
         var customBusiness = settings.GetString(BusinessOperatingProfiles.CustomDescriptionKey);
         return $$"""
 {{operatingInstruction}}
-Response tone: {{tone}}. Never propose more than {{maxItems}} primary plan items or {{maxAlternatives}} alternatives.
+Response tone: concise. Never propose more than 3 primary plan items or 2 alternatives.
 Business operating profile: {{profile.Label}}. {{profile.PromptOverlay}}
 {{(profile.Key == "custom" && !string.IsNullOrWhiteSpace(customBusiness) ? $"Custom business context: {customBusiness}" : string.Empty)}}
-{{(string.IsNullOrWhiteSpace(custom) ? string.Empty : $"Owner configuration: {custom}")}}
 
 <authoritative_operating_context>
 {{JsonSerializer.Serialize(context, JsonOptions)}}

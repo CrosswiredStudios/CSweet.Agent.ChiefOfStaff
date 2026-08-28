@@ -153,9 +153,13 @@ public sealed class ChiefOfStaffProfileTests
         var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Select(x => x.GetProperty("key").GetString()).ToList();
         Assert.Equal([
-            "llmProviderId", "llmModel", "businessOperatingProfile", "customBusinessDescription",
-            "responseTone", "proactivePlanning", "maxPlanItems", "maxAlternatives", "customInstructions"
+            "llmProviderId", "llmModel", "businessOperatingProfile", "customBusinessDescription"
         ], configurationKeys);
+        var customDescription = manifest.RootElement.GetProperty("configuration").EnumerateArray()
+            .Single(x => x.GetProperty("key").GetString() == "customBusinessDescription");
+        Assert.True(customDescription.GetProperty("required").GetBoolean());
+        Assert.Equal("businessOperatingProfile", customDescription.GetProperty("visibleWhenFieldKey").GetString());
+        Assert.Equal("custom", customDescription.GetProperty("visibleWhenValue").GetString());
         Assert.Contains(PlatformCapabilities.BusinessProfileRead, requires);
         Assert.Contains(PlatformCapabilities.WorkforceSearch, requires);
         Assert.Contains(AgentCatalogCapabilities.Search, requires);

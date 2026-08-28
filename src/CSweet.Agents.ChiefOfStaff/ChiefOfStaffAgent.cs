@@ -76,48 +76,11 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
             .TextArea(
                 BusinessOperatingProfiles.CustomDescriptionKey,
                 "Custom Business Description",
-                description: "Optional organizational context used when the Custom operating profile is selected.",
-                placeholder: "Describe the business model and any unusual organizational needs.")
-            .Select(
-                "responseTone",
-                "Response Tone",
-                [
-                    new AgentConfigurationOption("concise", "Concise"),
-                    new AgentConfigurationOption("balanced", "Balanced"),
-                    new AgentConfigurationOption("detailed", "Detailed")
-                ],
                 required: true,
-                description: "Controls how much detail the assistant uses in executive responses.",
-                defaultValue: "concise")
-            .Boolean(
-                "proactivePlanning",
-                "Proactive Planning",
-                required: true,
-                description: "Allows the assistant to suggest organization and staffing plans without being explicitly asked.",
-                defaultValue: true)
-            .Number(
-                "maxPlanItems",
-                "Maximum Plan Items",
-                required: true,
-                description: "Caps the number of roles the assistant proposes in a single staffing plan.",
-                minimum: 3,
-                maximum: 20,
-                step: 1,
-                defaultValue: 3)
-            .Number(
-                "maxAlternatives",
-                "Maximum Alternatives",
-                required: true,
-                description: "Caps materially useful alternatives in an executive recommendation.",
-                minimum: 0,
-                maximum: 2,
-                step: 1,
-                defaultValue: 2)
-            .TextArea(
-                "customInstructions",
-                "Custom Instructions",
-                description: "Optional operating guidance that is appended to the assistant's built-in instructions.",
-                placeholder: "Example: Prefer short plans with clear owners and approval points.");
+                description: "Organizational context required when the Custom operating profile is selected.",
+                placeholder: "Describe the business model and any unusual organizational needs.",
+                visibleWhenFieldKey: BusinessOperatingProfiles.ConfigurationKey,
+                visibleWhenValue: "custom");
     }
 
     public override async Task HandleEventAsync(

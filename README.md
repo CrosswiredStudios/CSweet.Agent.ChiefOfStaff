@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet. The catalog repository name is `CSweet.Agent.ChiefOfStaff`; this checkout retains the historical `CSweetAgentChiefOfStaff` name.
 
-The agent uses `CSweet.Agent.SDK` 3.21.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.22.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active Product Managers sharing the same CEO own their product-team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -35,7 +35,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.21.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.22.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
