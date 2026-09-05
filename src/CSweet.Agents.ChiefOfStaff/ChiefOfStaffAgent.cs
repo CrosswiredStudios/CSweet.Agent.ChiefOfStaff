@@ -696,9 +696,12 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        await RequireActiveChiefAsync(context, cancellationToken);
+        var (_, _, organization) = await RequireActiveChiefAsync(context, cancellationToken);
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         var managerChat = await FindManagerChatAsync(context, cancellationToken);
+        var requesterDisplayName = organization.People
+            .SingleOrDefault(x => x.Id == request.RequesterOrganizationUserId)
+            ?.DisplayName;
         var actionableRecommendations =
             new List<(ResourceChangeRoleDelta Delta, HiringRecommendationResponse Recommendation)>();
         foreach (var delta in request.Deltas.OrderBy(x => x.Role.Priority))
@@ -752,7 +755,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         if (request.Deltas.Count == 0) return;
         var messageId = await SendCommunicationMessageAsync(
             managerChat.Id,
-            BuildResourceChangeManagerBrief(request),
+            BuildResourceChangeManagerBrief(requesterDisplayName),
             $"resource-change:{request.Id:N}:manager-brief",
             context,
             cancellationToken);
@@ -770,39 +773,12 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         }
     }
 
-    internal static string BuildResourceChangeManagerBrief(ResourceChangeRequestResponse request)
+    internal static string BuildResourceChangeManagerBrief(string? requesterDisplayName)
     {
-        var content = new StringBuilder();
-        content.Append("Manager-approved staffing update requested by organization user `")
-            .Append(request.RequesterOrganizationUserId.ToString("D"))
-            .Append("` and managed by organization user `")
-            .Append(request.ManagerOrganizationUserId.ToString("D"))
-            .Append("` for **")
-            .Append(request.ProductGoal)
-            .AppendLine("**")
-            .AppendLine();
-        foreach (var delta in request.Deltas
-                     .OrderBy(x => x.Role.Priority)
-                     .ThenBy(x => x.Role.Title, StringComparer.Ordinal))
-        {
-            content.Append("- **")
-                .Append(delta.ChangeKind)
-                .Append(": ")
-                .Append(delta.Role.Title)
-                .Append("** — priority ")
-                .Append(delta.Role.Priority)
-                .Append(", headcount ")
-                .Append(delta.Role.Headcount)
-                .Append(", ")
-                .Append(delta.Role.Timing)
-                .Append(". ")
-                .AppendLine(delta.Role.Purpose);
-        }
-
-        content.AppendLine()
-            .Append("Added and increased roles are now candidate-free hiring suggestions administered by the Chief on behalf of the requesting functional lead. ")
-            .Append("Marketplace review, spending, installation, and each hire remain separately approved.");
-        return content.ToString();
+        var source = string.IsNullOrWhiteSpace(requesterDisplayName)
+            ? "the requesting agent"
+            : requesterDisplayName.Trim();
+        return $"I have put together suggestions for the hiring plan you approved from {source}.";
     }
 
     private async Task<(Guid InstallationId, OrganizationPerson Self, OrganizationSnapshotResponse Organization)>
@@ -936,7 +912,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
 
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         if (backlog.Recommendations.Any(x =>
-                GameStudioOwnershipPolicy.IsProductManager(x) &&
+                GameStudioOwnershipPolicy.IsGameProducer(x) &&
                 (workstreamId is { } scope
                     ? x.WorkstreamId == scope
                     : x.WorkstreamId is null)))
@@ -969,7 +945,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 "game-studio",
                 StringComparison.Ordinal) ||
             !SplitResponseSegments(response).Any(segment =>
-                segment.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) &&
+                segment.Contains("Game Producer", StringComparison.OrdinalIgnoreCase) &&
                 IsHiringRecommendationLine(segment)))
             return response;
 
@@ -978,17 +954,17 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             operatingContext.Organization,
             operatingContext.HiringBacklog,
             requestedWorkstreamId);
-        return EnforceGameStudioProductManagerOwnership(response, decision);
+        return EnforceGameStudioProducerOwnership(response, decision);
     }
 
-    internal static string EnforceGameStudioProductManagerOwnership(
+    internal static string EnforceGameStudioProducerOwnership(
         string response,
-        ProductManagerOwnershipDecision decision) => decision switch
+        GameProducerOwnershipDecision decision) => decision switch
         {
-            ProductManagerOwnershipDecision.DelegateToCreativeDirector =>
-                "Creative and product-team design for this game is delegated to your Creative Director. I will not create a CEO-direct Product Manager recommendation; the Creative Director's governed staffing plan will return to you for approval.",
-            ProductManagerOwnershipDecision.ClarifyProject =>
-                "I see multiple active game projects and cannot safely assign product-team ownership from the current context. Which game project does the Creative Director own?",
+            GameProducerOwnershipDecision.DelegateToCreativeDirector =>
+                "Creative direction and delivery-team design for this game are delegated to your Creative Director. I will not create a CEO-direct Game Producer recommendation; the Creative Director's governed staffing plan will return to you for approval.",
+            GameProducerOwnershipDecision.ClarifyProject =>
+                "I see multiple active game projects and cannot safely assign delivery-team ownership from the current context. Which game project does the Creative Director own?",
             _ => response
         };
 

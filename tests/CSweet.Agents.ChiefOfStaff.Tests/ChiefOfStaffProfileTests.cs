@@ -202,7 +202,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Do not call it from model responses", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("is not a blocked condition", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("one combined brief", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("one concise notice", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never ask a question in the same response that makes a recommendation", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("do not ask for information merely because a profile field is incomplete", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -445,41 +445,23 @@ What type of business are you building?
     }
 
     [Fact]
-    public void ResourceChangeManagerBrief_ListsEveryDeltaInPriorityOrder()
+    public void ResourceChangeManagerBrief_NamesTheRequestingAgentWithoutRepeatingRoleDetails()
     {
-        var request = ResourceChange(
-            new ResourceChangeRoleDelta(
-                "Increase",
-                Role("quality", "QA / Playtester", 3, 2),
-                Role("quality", "QA / Playtester", 3, 1)),
-            new ResourceChangeRoleDelta(
-                "Add",
-                Role("web3d", "Lead Web3D Developer", 1, 1),
-                null),
-            new ResourceChangeRoleDelta(
-                "Remove",
-                Role("legacy", "Legacy Generalist", 4, 1),
-                Role("legacy", "Legacy Generalist", 4, 1)),
-            new ResourceChangeRoleDelta(
-                "Modify",
-                Role("design", "Game Designer", 2, 1),
-                Role("design", "Game Designer", 2, 1)));
+        var brief = ChiefOfStaffAgent.BuildResourceChangeManagerBrief("C-Sweet Product Manager");
 
-        var brief = ChiefOfStaffAgent.BuildResourceChangeManagerBrief(request);
+        Assert.Equal(
+            "I have put together suggestions for the hiring plan you approved from C-Sweet Product Manager.",
+            brief);
+        Assert.DoesNotContain("organization user", brief, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("priority", brief, StringComparison.OrdinalIgnoreCase);
+    }
 
-        var lead = brief.IndexOf("Lead Web3D Developer", StringComparison.Ordinal);
-        var designer = brief.IndexOf("Game Designer", StringComparison.Ordinal);
-        var quality = brief.IndexOf("QA / Playtester", StringComparison.Ordinal);
-        var removed = brief.IndexOf("Legacy Generalist", StringComparison.Ordinal);
-        Assert.True(lead < designer && designer < quality && quality < removed);
-        Assert.Contains("**Add: Lead Web3D Developer**", brief);
-        Assert.Contains("**Increase: QA / Playtester**", brief);
-        Assert.Contains("**Modify: Game Designer**", brief);
-        Assert.Contains("**Remove: Legacy Generalist**", brief);
-        Assert.Contains("candidate-free hiring suggestions", brief, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(request.RequesterOrganizationUserId.ToString("D"), brief, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(request.ManagerOrganizationUserId.ToString("D"), brief, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("administered by the Chief", brief, StringComparison.OrdinalIgnoreCase);
+    [Fact]
+    public void ResourceChangeManagerBrief_FallsBackWhenTheRequestingAgentIsUnavailable()
+    {
+        Assert.Equal(
+            "I have put together suggestions for the hiring plan you approved from the requesting agent.",
+            ChiefOfStaffAgent.BuildResourceChangeManagerBrief(null));
     }
 
     [Fact]
@@ -687,9 +669,11 @@ What type of business are you building?
                 todo.CorrelationId, out _)));
         Assert.NotNull(managerMessage);
         Assert.Equal(managerChatId, managerMessage.ChatId);
-        Assert.Contains("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("QA / Playtester", managerMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("candidate-free hiring suggestions", managerMessage.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            "I have put together suggestions for the hiring plan you approved from C-Sweet Product Manager.",
+            managerMessage.Content);
+        Assert.DoesNotContain("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("QA / Playtester", managerMessage.Content, StringComparison.Ordinal);
         Assert.Equal(2, suggestedActions.Count);
         Assert.All(suggestedActions, action => Assert.Equal(messageId, action.MessageId));
         Assert.All(suggestedActions, action =>

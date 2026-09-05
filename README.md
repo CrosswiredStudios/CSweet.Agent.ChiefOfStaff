@@ -2,11 +2,11 @@
 
 First-party Chief of Staff agent for C-Sweet. The catalog repository name is `CSweet.Agent.ChiefOfStaff`; this checkout retains the historical `CSweetAgentChiefOfStaff` name.
 
-The agent uses `CSweet.Agent.SDK` 3.22.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.27.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
-For the Game Studio profile, a pending or active Creative Director owns the game project's creative vision and initial product-leadership design. The Chief suppresses its own same-project Product Manager suggestion, removes an unsourced conflict once creative ownership becomes active, and leaves the Creative Director's approved PM-first plan intact. A Product Manager hired from that plan reports to the Creative Director. When multiple game projects make the ownership scope ambiguous, the Chief asks one project-ownership question and does not mutate hiring state.
+For the Game Studio profile, a pending or active Creative Director owns creative/product authority and initial team design. The Chief suppresses its own same-project Game Producer suggestion, removes an unsourced conflict once creative ownership becomes active, and leaves the Creative Director's approved Producer-led plan intact. A Game Producer hired from that plan reports to the Creative Director and owns delivery. When multiple game projects make the ownership scope ambiguous, the Chief asks one project-ownership question and does not mutate hiring state.
 
 ## Runtime behavior
 
@@ -26,9 +26,9 @@ For the Game Studio profile, a pending or active Creative Director owns the game
   creation and suggested-action capabilities.
 - Provider and service credentials never enter the process.
 - CEO-approved functional-lead resource-change events retain the lead-authored reporting lines,
-  are administratively reconciled into the Chief-owned hiring backlog, and are summarized to the CEO in one
-  idempotent priority-ordered brief with one role-scoped Marketplace action per new or increased
-  hiring recommendation.
+  are administratively reconciled into the Chief-owned hiring backlog, and produce one concise,
+  idempotent notice naming the requesting agent with one role-scoped Marketplace action per new or
+  increased hiring recommendation.
 
 ## Build
 
@@ -37,7 +37,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.22.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.27.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 

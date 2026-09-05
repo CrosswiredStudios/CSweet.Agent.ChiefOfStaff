@@ -2,7 +2,7 @@ using CSweet.Agent.SDK;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
-internal enum ProductManagerOwnershipDecision
+internal enum GameProducerOwnershipDecision
 {
     Allow,
     DelegateToCreativeDirector,
@@ -11,7 +11,7 @@ internal enum ProductManagerOwnershipDecision
 
 internal static class GameStudioOwnershipPolicy
 {
-    internal static ProductManagerOwnershipDecision Assess(
+    internal static GameProducerOwnershipDecision Assess(
         OrganizationSnapshotResponse? organization,
         HiringBacklogResponse? backlog,
         Guid? requestedWorkstreamId)
@@ -31,25 +31,25 @@ internal static class GameStudioOwnershipPolicy
             .ToList() ?? [];
         var hasCreativeOwnership = creativeDirectorIds.Count > 0 || pendingCreativeDirectorScopes.Count > 0;
         if (!hasCreativeOwnership)
-            return ProductManagerOwnershipDecision.Allow;
+            return GameProducerOwnershipDecision.Allow;
 
         if (requestedWorkstreamId is { } workstreamId)
         {
             if (creativeOwnedWorkstreamIds.Contains(workstreamId) ||
                 pendingCreativeDirectorScopes.Contains(workstreamId))
-                return ProductManagerOwnershipDecision.DelegateToCreativeDirector;
+                return GameProducerOwnershipDecision.DelegateToCreativeDirector;
 
             // A single early-stage game is the default scope for an unscoped Creative Director.
             if (activeWorkstreams.Count <= 1 &&
                 (creativeDirectorIds.Count > 0 || pendingCreativeDirectorScopes.Contains(null)))
-                return ProductManagerOwnershipDecision.DelegateToCreativeDirector;
+                return GameProducerOwnershipDecision.DelegateToCreativeDirector;
 
-            return ProductManagerOwnershipDecision.Allow;
+            return GameProducerOwnershipDecision.Allow;
         }
 
         return activeWorkstreams.Count > 1
-            ? ProductManagerOwnershipDecision.ClarifyProject
-            : ProductManagerOwnershipDecision.DelegateToCreativeDirector;
+            ? GameProducerOwnershipDecision.ClarifyProject
+            : GameProducerOwnershipDecision.DelegateToCreativeDirector;
     }
 
     internal static bool IsCreativeDirectorRole(string? roleKey, string? title)
@@ -61,16 +61,16 @@ internal static class GameStudioOwnershipPolicy
                normalizedTitle.Contains("gamedirector", StringComparison.Ordinal);
     }
 
-    internal static bool IsProductManager(HiringRecommendationResponse recommendation) =>
-        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.RoleKey ?? string.Empty) == "productmanager" ||
-        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.Title) == "productmanager";
+    internal static bool IsGameProducer(HiringRecommendationResponse recommendation) =>
+        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.RoleKey ?? string.Empty) == "gameproducer" ||
+        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.Title) is "gameproducer" or "videogameproducer";
 
     internal static bool IsConflictingChiefProductManager(
         HiringRecommendationResponse recommendation,
         OrganizationSnapshotResponse? organization,
         Guid? creativeDirectorWorkstreamId)
     {
-        if (!IsProductManager(recommendation) || recommendation.SourceResourceChangeRequestId is not null)
+        if (!IsGameProducer(recommendation) || recommendation.SourceResourceChangeRequestId is not null)
             return false;
 
         if (creativeDirectorWorkstreamId is { } explicitScope)

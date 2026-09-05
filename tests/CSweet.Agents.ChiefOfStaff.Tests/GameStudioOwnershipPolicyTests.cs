@@ -17,10 +17,10 @@ public sealed class GameStudioOwnershipPolicyTests
 
         var decision = GameStudioOwnershipPolicy.Assess(
             organization, new HiringBacklogResponse([]), requestedWorkstreamId: null);
-        var guarded = ChiefOfStaffAgent.EnforceGameStudioProductManagerOwnership(
-            "Priority 1 Hire: Product Manager", decision);
+        var guarded = ChiefOfStaffAgent.EnforceGameStudioProducerOwnership(
+            "Priority 1 Hire: Game Producer", decision);
 
-        Assert.Equal(ProductManagerOwnershipDecision.DelegateToCreativeDirector, decision);
+        Assert.Equal(GameProducerOwnershipDecision.DelegateToCreativeDirector, decision);
         Assert.Contains("delegated", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Priority 1 Hire", guarded, StringComparison.OrdinalIgnoreCase);
     }
@@ -40,10 +40,10 @@ public sealed class GameStudioOwnershipPolicyTests
 
         var decision = GameStudioOwnershipPolicy.Assess(
             organization, new HiringBacklogResponse([]), requestedWorkstreamId: null);
-        var guarded = ChiefOfStaffAgent.EnforceGameStudioProductManagerOwnership(
-            "Hire a Product Manager.", decision);
+        var guarded = ChiefOfStaffAgent.EnforceGameStudioProducerOwnership(
+            "Hire a Game Producer.", decision);
 
-        Assert.Equal(ProductManagerOwnershipDecision.ClarifyProject, decision);
+        Assert.Equal(GameProducerOwnershipDecision.ClarifyProject, decision);
         Assert.Equal(1, guarded.Count(x => x == '?'));
     }
 
@@ -85,7 +85,7 @@ public sealed class GameStudioOwnershipPolicyTests
             new HiringBacklogResponse([pendingCreativeDirector]),
             workstreamId);
 
-        Assert.Equal(ProductManagerOwnershipDecision.DelegateToCreativeDirector, decision);
+        Assert.Equal(GameProducerOwnershipDecision.DelegateToCreativeDirector, decision);
     }
 
     private static OrganizationSnapshotResponse Organization(
@@ -97,10 +97,10 @@ public sealed class GameStudioOwnershipPolicyTests
     private static HiringRecommendationResponse Recommendation(
         Guid? workstreamId,
         Guid? sourceRequestId) =>
-        new(Guid.NewGuid(), workstreamId, "Product Manager", "Own product outcomes.", "Suggested",
+        new(Guid.NewGuid(), workstreamId, "Game Producer", "Own game delivery.", "Suggested",
             null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
         {
-            RoleKey = "product-manager",
+            RoleKey = "game-producer",
             SourceResourceChangeRequestId = sourceRequestId
         };
 }
