@@ -702,6 +702,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         var requesterDisplayName = organization.People
             .SingleOrDefault(x => x.Id == request.RequesterOrganizationUserId)
             ?.DisplayName;
+        var approverId = request.DecidedByOrganizationUserId ?? request.ManagerOrganizationUserId;
+        var approverDisplayName = organization.People.SingleOrDefault(x => x.Id == approverId)?.DisplayName;
         var actionableRecommendations =
             new List<(ResourceChangeRoleDelta Delta, HiringRecommendationResponse Recommendation)>();
         foreach (var delta in request.Deltas.OrderBy(x => x.Role.Priority))
@@ -755,7 +757,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         if (request.Deltas.Count == 0) return;
         var messageId = await SendCommunicationMessageAsync(
             managerChat.Id,
-            BuildResourceChangeManagerBrief(requesterDisplayName),
+            BuildResourceChangeManagerBrief(requesterDisplayName, approverDisplayName),
             $"resource-change:{request.Id:N}:manager-brief",
             context,
             cancellationToken);
@@ -773,12 +775,14 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         }
     }
 
-    internal static string BuildResourceChangeManagerBrief(string? requesterDisplayName)
+    internal static string BuildResourceChangeManagerBrief(string? requesterDisplayName, string? approverDisplayName)
     {
         var source = string.IsNullOrWhiteSpace(requesterDisplayName)
             ? "the requesting agent"
             : requesterDisplayName.Trim();
-        return $"I have put together suggestions for the hiring plan you approved from {source}.";
+        return string.IsNullOrWhiteSpace(approverDisplayName)
+            ? $"I have put together hiring suggestions for the approved plan from {source}."
+            : $"I have put together hiring suggestions for the plan from {source}, approved by {approverDisplayName.Trim()}.";
     }
 
     private async Task<(Guid InstallationId, OrganizationPerson Self, OrganizationSnapshotResponse Organization)>

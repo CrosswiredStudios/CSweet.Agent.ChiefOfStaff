@@ -447,10 +447,10 @@ What type of business are you building?
     [Fact]
     public void ResourceChangeManagerBrief_NamesTheRequestingAgentWithoutRepeatingRoleDetails()
     {
-        var brief = ChiefOfStaffAgent.BuildResourceChangeManagerBrief("C-Sweet Product Manager");
+        var brief = ChiefOfStaffAgent.BuildResourceChangeManagerBrief("C-Sweet Product Manager", "Owner");
 
         Assert.Equal(
-            "I have put together suggestions for the hiring plan you approved from C-Sweet Product Manager.",
+            "I have put together hiring suggestions for the plan from C-Sweet Product Manager, approved by Owner.",
             brief);
         Assert.DoesNotContain("organization user", brief, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("priority", brief, StringComparison.OrdinalIgnoreCase);
@@ -460,17 +460,30 @@ What type of business are you building?
     public void ResourceChangeManagerBrief_FallsBackWhenTheRequestingAgentIsUnavailable()
     {
         Assert.Equal(
-            "I have put together suggestions for the hiring plan you approved from the requesting agent.",
-            ChiefOfStaffAgent.BuildResourceChangeManagerBrief(null));
+            "I have put together hiring suggestions for the plan from the requesting agent, approved by Creative Director.",
+            ChiefOfStaffAgent.BuildResourceChangeManagerBrief(null, "Creative Director"));
     }
 
-    [Fact]
-    public async Task CeoApprovedProductManagerResourceChange_CreatesLeadAuthoredSuggestionsAndBriefsCeo()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ResourceChangeManagerBrief_DoesNotGuessAnUnavailableApprover(string? approver)
+    {
+        Assert.Equal("I have put together hiring suggestions for the approved plan from Producer.",
+            ChiefOfStaffAgent.BuildResourceChangeManagerBrief("Producer", approver));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApprovedResourceChange_NamesActualApproverAndCreatesSuggestions(bool directorApproved)
     {
         var organizationId = Guid.NewGuid();
         var chiefInstallationId = Guid.NewGuid();
         var chiefId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
+        var directorId = Guid.NewGuid();
         var productManagerId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var managerChatId = Guid.NewGuid();
@@ -509,7 +522,10 @@ What type of business are you building?
             "Delivered",
             "Approved.",
             DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow)
+        {
+            DecidedByOrganizationUserId = directorApproved ? directorId : null
+        };
         var organization = new OrganizationSnapshotResponse(
             organizationId,
             "Active",
@@ -518,6 +534,8 @@ What type of business are you building?
                     chiefId, "Sherly", "Agent", null, ownerId, chiefInstallationId, true),
                 new OrganizationPerson(
                     ownerId, "Owner", "Human", null, null, null, true),
+                new OrganizationPerson(
+                    directorId, "Video Game Creative Director", "Agent", null, ownerId, Guid.NewGuid(), true),
                 new OrganizationPerson(
                     productManagerId, "C-Sweet Product Manager", "Agent", null, ownerId,
                     request.RequesterInstallationId, true)
@@ -670,7 +688,7 @@ What type of business are you building?
         Assert.NotNull(managerMessage);
         Assert.Equal(managerChatId, managerMessage.ChatId);
         Assert.Equal(
-            "I have put together suggestions for the hiring plan you approved from C-Sweet Product Manager.",
+            $"I have put together hiring suggestions for the plan from C-Sweet Product Manager, approved by {(directorApproved ? "Video Game Creative Director" : "Owner")}.",
             managerMessage.Content);
         Assert.DoesNotContain("Lead Web3D Developer", managerMessage.Content, StringComparison.Ordinal);
         Assert.DoesNotContain("QA / Playtester", managerMessage.Content, StringComparison.Ordinal);
