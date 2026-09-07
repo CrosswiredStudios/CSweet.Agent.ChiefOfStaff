@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet. The catalog repository name is `CSweet.Agent.ChiefOfStaff`; this checkout retains the historical `CSweetAgentChiefOfStaff` name.
 
-The agent uses `CSweet.Agent.SDK` 3.27.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.31.1 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -37,7 +37,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.27.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.31.1, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
@@ -46,3 +46,7 @@ The protocol-v1 transport APIs were removed. The agent now uses `AgentEventEnvel
 ## Provided capability behavior
 
 Each `provides` entry in `csweet-plugin.json` is an exact durable work callback. Assistant and check-in operations may generate progress and a durable result. Product role briefs and plan reviews are advisory. Only a CEO-approved lead-authored resource change is reconciled into the installation-scoped hiring backlog through explicit platform tools. Product escalation sends an external communication and uses the supplied idempotency key. Configuration update durably changes runtime configuration. Full contracts and requested authority are in [GRANTS.md](GRANTS.md).
+
+## Provider queue handling
+
+Uses SDK 3.31.1 for acknowledged LLM waiting, conversation activity, and host-authoritative deadline updates. Deploy the matching C-Sweet AgentHost and reimport this package to enable the private polling protocol.
