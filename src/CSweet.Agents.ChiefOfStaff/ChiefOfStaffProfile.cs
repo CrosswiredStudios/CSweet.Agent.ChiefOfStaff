@@ -8,7 +8,7 @@ public static class ChiefOfStaffProfile
 
     public const string Version = "2.4.1";
 
-    public const string DefaultDisplayName = "C-Sweet Chief of Staff";
+    public const string DefaultDisplayName = "Evelyn Brooks";
 
     public const string AgentKey = "chief-of-staff";
 

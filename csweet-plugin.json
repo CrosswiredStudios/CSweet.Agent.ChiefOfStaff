@@ -2,7 +2,7 @@
   "manifestVersion": "2.0",
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
-  "name": "C-Sweet Chief of Staff",
+  "name": "Evelyn Brooks",
   "version": "2.4.1",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
@@ -109,6 +109,9 @@
   "webAccess": { "mode": "None", "rules": [] },
   "ui": [],
   "catalog": {
+    "imageUrl": "https://raw.githubusercontent.com/CrosswiredStudios/CSweet.Agent.ChiefOfStaff/main/assets/branding/portrait-v1.jpg",
+    "companyLogoUrl": "https://raw.githubusercontent.com/CrosswiredStudios/CSweet.Agent.ChiefOfStaff/main/assets/branding/csweet-icon.svg",
+    "accentColor": "#384B76",
     "summary": "Turns executive direction into coordinated priorities, staffing plans, decisions, and follow-through across the company.",
     "category": "Leadership",
     "role": { "key": "chief-of-staff", "name": "Chief of Staff" },
