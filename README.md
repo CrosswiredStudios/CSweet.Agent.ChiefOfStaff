@@ -61,3 +61,9 @@ An appropriate profile, or insufficient evidence for a clearly better preset, co
 Accepting the switch saves only the Chief employee's profile override through the platform configuration service, preserving the model and other settings. Both choices resume focus selection through a durable event using the effective saved profile. A stale switch is rejected; Leave unchanged preserves the latest settings. Unavailable company data or invalid inference leaves onboarding retryable without creating a focus agenda.
 
 Deploy the matching platform changes before importing 2.4.0, and approve its operating-state grants and configuration-choice event subscription. The installation defaults remain General, with Custom available during installation.
+
+## Selectable questions (2.4.1)
+
+The Chief prefers `ask_user` whenever it needs an answer and the tool is available, including clarifications, confirmations, and relayed Product Manager decisions. It supplies concise choices from known context so the owner can click instead of typing. Ordinary questions retain Something else; profile decisions retain only Switch and Leave unchanged. Required focus-card failures propagate to the durable callback instead of acknowledging onboarding without a card.
+
+Restart the matching platform services after deploying profile-choice support: older AgentHost schemas reject `configurationChange`. Version 2.4.1 omits that optional property on ordinary questions. Reimporting this package gives a previously failed onboarding event a fresh package delivery, reusing its original assessment and message keys.

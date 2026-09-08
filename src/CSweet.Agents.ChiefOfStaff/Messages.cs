@@ -64,6 +64,7 @@ internal sealed record RequestUserInputRequest(
     string RecommendedOptionId,
     string IdempotencyKey)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public ConfigurationChoice? ConfigurationChange { get; init; }
 }
 

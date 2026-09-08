@@ -124,6 +124,49 @@ public sealed class OperatingProfileOnboardingTests
         Assert.Equal(0, harness.Completions);
     }
 
+    [Theory]
+    [InlineData(true, "general")]
+    [InlineData(false, "game-studio")]
+    public async Task RequiredAskFailure_KeepsOnboardingUnacknowledgedAndRetriesTheSameQuestion(bool appropriate, string suggested)
+    {
+        var harness = new Harness(Assessment(appropriate, suggested, 0.95)) { FailQuestions = true };
+        await Assert.ThrowsAsync<PlatformCapabilityException>(harness.HireAsync);
+        Assert.Equal(0, harness.Completions);
+        Assert.Empty(harness.Decisions);
+        harness.FailQuestions = false;
+        await harness.HireAsync();
+        Assert.Equal(1, harness.Completions);
+        Assert.Equal(1, harness.Model.Calls);
+        Assert.Single(harness.Messages);
+        Assert.Single(harness.Decisions);
+    }
+
+    [Fact]
+    public void OrdinaryQuestions_OmitConfigurationExtensionForOlderAskToolSchemas()
+    {
+        var request = new RequestUserInputRequest(Guid.NewGuid(), null, Guid.NewGuid(), "Choose a focus",
+            [new("a", "Product"), new("b", "Research")], "a", "ordinary-question");
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var ordinary = JsonSerializer.SerializeToElement(request, options);
+        Assert.False(ordinary.TryGetProperty("configurationChange", out _));
+        var profileChoice = JsonSerializer.SerializeToElement(request with
+            { ConfigurationChange = new("businessOperatingProfile", "general", "game-studio") }, options);
+        Assert.Equal("game-studio", profileChoice.GetProperty("configurationChange").GetProperty("proposedValue").GetString());
+    }
+
+    [Fact]
+    public void RelayedQuestion_UsesDistinctBoundedChoicesAndKeepsTheRecommendation()
+    {
+        var escalation = new ProductEscalationRequest(Guid.NewGuid(), Guid.NewGuid(), "Launch", "Which launch?", "Timing",
+            ["Alpha", "Beta", " beta ", "Gamma", "Delta", "Epsilon"], "Epsilon", Guid.NewGuid(), "relay");
+        var choices = ChiefOfStaffAgent.BuildEscalationOptions(escalation);
+        Assert.Equal(4, choices.Count);
+        Assert.Equal("Epsilon", choices[0].Label);
+        Assert.Equal(4, choices.Select(x => x.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var confirmation = ChiefOfStaffAgent.BuildEscalationOptions(escalation with { Options = ["Beta"] });
+        Assert.Equal(["Beta", "Discuss alternatives"], confirmation.Select(x => x.Label));
+    }
+
     private static string Assessment(bool appropriate, string key, double confidence) => JsonSerializer.Serialize(new
         { currentProfileAppropriate = appropriate, recommendedProfileKey = key, confidence, reason = "The company develops its own games." });
     private static AgentEventEnvelope Event(string name, Guid id, object payload) => new(Guid.NewGuid(), id, name,
@@ -139,6 +182,7 @@ public sealed class OperatingProfileOnboardingTests
         public ChiefOfStaffAgent Agent { get; set; }
         public FakeModel Model { get; }
         public int Completions { get; private set; }
+        public bool FailQuestions { get; set; }
         public Dictionary<string, AgentOperatingStateResponse> States { get; } = [];
         public Dictionary<string, string> Messages { get; } = [];
         public Dictionary<string, RequestUserInputRequest> Decisions { get; } = [];
@@ -168,6 +212,9 @@ public sealed class OperatingProfileOnboardingTests
                 })
                 .RegisterCapability<RequestUserInputRequest, RequestUserInputResponse>(ChiefOfStaffProfile.RequestUserInputCapability, (request, _) =>
                 {
+                    if (FailQuestions)
+                        throw new PlatformCapabilityException(ChiefOfStaffProfile.RequestUserInputCapability,
+                            PlatformCapabilityErrorCode.Unavailable, "Question service is temporarily unavailable.", retryable: true);
                     Decisions[request.IdempotencyKey] = request;
                     return Task.FromResult(new RequestUserInputResponse(Guid.NewGuid()));
                 })

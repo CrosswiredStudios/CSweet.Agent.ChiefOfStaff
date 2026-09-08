@@ -603,6 +603,9 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 exception,
                 "Chief of Staff could not attach the onboarding focus decision to message {MessageId}.",
                 messageId);
+            // Focus selection is a required interaction. Keep the durable callback retryable
+            // instead of acknowledging a question for which the user has no choice card.
+            throw;
         }
     }
 
@@ -1570,7 +1573,10 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 Name = runtimeContext.Identity?.DisplayName ?? ChiefOfStaffProfile.DefaultDisplayName,
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = ChiefOfStaffProfile.SystemPrompt,
+                    Instructions = ChiefOfStaffProfile.SystemPrompt + "\n\n" +
+                        (tools.OfType<AIFunctionDeclaration>().Any(x => x.Name == "ask_user")
+                            ? "The ask_user tool is available in this turn. Prefer it for every question: offer likely answers the owner can select, then wait for the answer. Attach to the current chatTurnId when supplied; for a standalone message use its returned message ID."
+                            : "The ask_user tool is unavailable in this turn. If an essential question is unavoidable, ask one concise plain-text question instead; do not invent a choice card."),
                     Tools = tools,
                     Reasoning = new ReasoningOptions
                     {
@@ -1848,28 +1854,42 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             .FirstOrDefault()
             ?? throw new InvalidOperationException("The Chief has no protected owner conversation.");
 
+        var options = BuildEscalationOptions(escalation);
+        var askAvailable = options.Count >= 2 && (await context.GetModelToolsAsync(cancellationToken))
+            .OfType<AIFunctionDeclaration>().Any(x => x.Name == "ask_user");
         var content = new System.Text.StringBuilder();
-        content.Append("The Product Manager needs one executive answer: ").Append(escalation.Question);
+        content.Append(askAvailable
+            ? $"The Product Manager needs an executive decision about {escalation.Topic}."
+            : $"The Product Manager needs one executive answer: {escalation.Question}");
         if (!string.IsNullOrWhiteSpace(escalation.WhyItMatters))
             content.Append("\n\nWhy it matters: ").Append(escalation.WhyItMatters);
-        if (escalation.Options.Count > 0)
+        if (!askAvailable && escalation.Options.Count > 0)
+            content.Append("\n\nOptions: ").Append(string.Join("; ", escalation.Options.Take(4)));
+        var messageId = await SendCommunicationMessageAsync(ownerChat.Id, content.ToString(),
+            escalation.IdempotencyKey, context, cancellationToken);
+        if (askAvailable)
         {
-            content.Append("\n\nOptions: ").Append(string.Join("; ", escalation.Options.Take(2)));
-            if (!string.IsNullOrWhiteSpace(escalation.RecommendedOption))
-                content.Append("\n\nRecommended: ").Append(escalation.RecommendedOption);
+            await context.Platform.InvokeAsync<RequestUserInputRequest, RequestUserInputResponse>(
+                ChiefOfStaffProfile.RequestUserInputCapability,
+                new RequestUserInputRequest(ownerChat.Id, null, messageId, escalation.Question,
+                    options, options[0].Id, $"product-question:{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(escalation.IdempotencyKey)))}"), cancellationToken);
         }
-        _ = await context.Platform.InvokeAsync<SendCommunicationMessageRequest, JsonElement>(
-            ChiefOfStaffProfile.SendCommunicationMessageCapability,
-            new SendCommunicationMessageRequest(
-                ownerChat.Id,
-                content.ToString(),
-                escalation.IdempotencyKey),
-            cancellationToken);
         return new ProductEscalationResponse(
             true,
             "Delivered",
             "The Chief sent the Product Manager's highest-value question to the CEO.",
             DateTimeOffset.UtcNow);
+    }
+
+    internal static IReadOnlyList<RequestUserInputOption> BuildEscalationOptions(ProductEscalationRequest escalation)
+    {
+        var choices = escalation.Options.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(x => string.Equals(x, escalation.RecommendedOption?.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Take(4).ToList();
+        if (choices.Count == 1) choices.Add("Discuss alternatives");
+        return choices.Select((x, index) => new RequestUserInputOption($"option-{index + 1}",
+            x.Length <= 160 ? x : x[..157] + "...", x.Length > 160 ? x[..Math.Min(x.Length, 500)] : null)).ToList();
     }
 
     private async Task PushProductManagerContextUpdatesAsync(
