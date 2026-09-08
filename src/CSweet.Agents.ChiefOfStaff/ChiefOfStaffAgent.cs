@@ -1571,7 +1571,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             {
                 Id = ChiefOfStaffProfile.AgentId,
                 Name = runtimeContext.Identity?.DisplayName ?? ChiefOfStaffProfile.DefaultDisplayName,
-                ChatOptions = new ChatOptions
+                ChatOptions = await runtimeContext.Platform.Calendar.WithToolsAsync(new ChatOptions
                 {
                     Instructions = ChiefOfStaffProfile.SystemPrompt + "\n\n" +
                         (tools.OfType<AIFunctionDeclaration>().Any(x => x.Name == "ask_user")
@@ -1582,7 +1582,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                     {
                         Output = ReasoningOutput.Full
                     }
-                },
+                }, cancellationToken),
                 AIContextProviders = useAgentMemory ? [memoryProvider] : []
             });
 

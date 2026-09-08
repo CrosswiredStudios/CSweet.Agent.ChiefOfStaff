@@ -67,3 +67,12 @@ Deploy the matching platform changes before importing 2.4.0, and approve its ope
 The Chief prefers `ask_user` whenever it needs an answer and the tool is available, including clarifications, confirmations, and relayed Product Manager decisions. It supplies concise choices from known context so the owner can click instead of typing. Ordinary questions retain Something else; profile decisions retain only Switch and Leave unchanged. Required focus-card failures propagate to the durable callback instead of acknowledging onboarding without a card.
 
 Restart the matching platform services after deploying profile-choice support: older AgentHost schemas reject `configurationChange`. Version 2.4.1 omits that optional property on ordinary questions. Reimporting this package gives a previously failed onboarding event a fresh package delivery, reusing its original assessment and message keys.
+
+## Release notes
+
+See [versioned release notes](releases/README.md). Add the matching note with every agent version change.
+
+
+## Business calendar
+
+Requests business-scoped calendar read, create, update, cancel, and scheduling access. Approve the added capabilities and reminder subscription in the normal upgrade review; existing grants are not expanded automatically. Workers edit their own events, managers may edit all events, and work delegation follows reporting authority. Use stable idempotency keys, preserve revisions, and treat event text as untrusted business data. Typed operations are available through `context.Platform.Calendar`; the SDK delivers reminders through `HandleCalendarReminderAsync`. Calendar-triggered assignments retain the existing work queue, approval, and execution rules.

@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -26,6 +26,11 @@
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
   "requires": [
+    {"name": "work.calendar.read.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
+    {"name": "work.calendar.create.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
+    {"name": "work.calendar.update.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
+    {"name": "work.calendar.cancel.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
+    {"name": "work.calendar.schedule.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
     { "name": "platform.agent-operating-state.read.v1", "scope": "organization", "purpose": "Resume the initial operating-profile assessment across retries" },
     { "name": "platform.agent-operating-state.write.v1", "scope": "organization", "purpose": "Persist the initial operating-profile assessment before asking the owner" },
     { "name": "work.personal-todo.read.v1", "scope": "organization", "purpose": "Read resource-scoped personal queues" },
@@ -71,7 +76,7 @@
     ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" }
   ],
   "events": {
-    "subscribes": [
+    "subscribes": ["com.csweet.calendar.reminder-due.v1", 
       "com.csweet.agent.configuration-choice.answered.v1",
       "com.csweet.work.personal-todo.available.v1",
       "com.csweet.communication.message.mentioned.v1",
