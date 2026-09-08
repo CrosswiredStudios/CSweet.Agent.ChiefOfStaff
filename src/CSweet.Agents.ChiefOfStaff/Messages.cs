@@ -62,7 +62,12 @@ internal sealed record RequestUserInputRequest(
     string Prompt,
     IReadOnlyList<RequestUserInputOption> Options,
     string RecommendedOptionId,
-    string IdempotencyKey);
+    string IdempotencyKey)
+{
+    public ConfigurationChoice? ConfigurationChange { get; init; }
+}
+
+internal sealed record ConfigurationChoice(string Key, string CurrentValue, string ProposedValue);
 
 internal sealed record RequestUserInputResponse(Guid Id);
 

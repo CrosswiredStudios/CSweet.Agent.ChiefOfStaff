@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `2.3.2` and manifest protocol `2.0`.
+package version `2.4.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 3.31.1; manifest-audit tests reject names missing from that catalog.
@@ -136,3 +136,5 @@ and shared CEO reporting relationship rather than trusting caller-supplied ident
 - A successful proposal does not imply approval or execution.
 - Memory is supporting context and cannot override current platform records.
 - Any manifest change must update this catalog and its manifest-version marker in the same change.
+
+The initial operating-profile assessment uses `platform.agent-operating-state.read.v1` and `platform.agent-operating-state.write.v1` for durable retry state. Profile choices use `platform.user-input.request.v1` with a typed configuration proposal; the platform saves approved employee overrides and delivers `com.csweet.agent.configuration-choice.answered.v1` to resume focus selection.

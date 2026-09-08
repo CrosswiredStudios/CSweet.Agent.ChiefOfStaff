@@ -68,6 +68,12 @@ internal static class BusinessOperatingProfiles
         return Profiles.TryGetValue(key, out var profile) ? profile : Profiles[GeneralKey];
     }
 
+    public static BusinessOperatingProfile? Find(string key) =>
+        Profiles.TryGetValue(key, out var profile) ? profile : null;
+
+    public static IReadOnlyList<BusinessOperatingProfile> SuggestedProfiles =>
+        Profiles.Values.Where(x => x.Key != "custom").ToList();
+
     private static BusinessOperatingProfile Profile(
         string key,
         string label,

@@ -12,7 +12,7 @@ using CSweet.WorkManagement.Contracts;
 
 namespace CSweet.Agents.ChiefOfStaff;
 
-public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
+public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
 {
     private readonly IAgentLlmClientFactory? _llmClientFactory;
     private readonly ILogger<ChiefOfStaffAgent> _logger;
@@ -88,6 +88,12 @@ public sealed class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        if (message.EventType == ConfigurationChoiceAnsweredEvent)
+        {
+            await HandleConfigurationChoiceAnsweredAsync(message, context, cancellationToken);
+            return;
+        }
+
         if (string.Equals(message.EventType, ChiefOfStaffProfile.OnboardedEvent, StringComparison.Ordinal))
         {
             await HandleOnboardedAsync(message, context, cancellationToken);
@@ -516,29 +522,36 @@ impossible, or denied. Otherwise perform the task and return a concise completio
 
         var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
         var profile = BusinessOperatingProfiles.Resolve(Settings);
+        if (await ReviewOnboardingProfileAsync(message, onboarding, operatingContext, profile, context, cancellationToken))
+        {
+            _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
+            return;
+        }
+        await BeginFocusOnboardingAsync(onboarding.ConversationId, $"agent-onboarded:{eventId:N}", operatingContext, profile, context, cancellationToken);
+        _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
+
+        _logger.LogInformation("Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.", eventId, onboarding.ConversationId);
+    }
+
+    private async Task BeginFocusOnboardingAsync(Guid conversationId, string idempotencyKey,
+        ChiefOperatingContext operatingContext, BusinessOperatingProfile profile,
+        AgentRuntimeContext context, CancellationToken cancellationToken)
+    {
         var openingMessage = BuildFocusOnboardingMessage(operatingContext, profile);
         await EnsureLeadershipCoverageAgendaAsync(profile, context, cancellationToken);
         var openingMessageId = await SendCommunicationMessageAsync(
-            onboarding.ConversationId,
+            conversationId,
             openingMessage,
-            $"agent-onboarded:{eventId:N}",
+            idempotencyKey,
             context,
             cancellationToken);
         await AttachOnboardingFocusDecisionAsync(
-            onboarding.ConversationId,
+            conversationId,
             openingMessageId,
             profile,
-            $"agent-onboarded:{eventId:N}:focus",
+            $"{idempotencyKey}:focus",
             context,
             cancellationToken);
-        _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(
-            message,
-            cancellationToken);
-
-        _logger.LogInformation(
-            "Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.",
-            eventId,
-            onboarding.ConversationId);
     }
 
     internal static string BuildFocusOnboardingMessage(

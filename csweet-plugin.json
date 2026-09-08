@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "C-Sweet Chief of Staff",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -26,6 +26,8 @@
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
   "requires": [
+    { "name": "platform.agent-operating-state.read.v1", "scope": "organization", "purpose": "Resume the initial operating-profile assessment across retries" },
+    { "name": "platform.agent-operating-state.write.v1", "scope": "organization", "purpose": "Persist the initial operating-profile assessment before asking the owner" },
     { "name": "work.personal-todo.read.v1", "scope": "organization", "purpose": "Read resource-scoped personal queues" },
     { "name": "work.personal-todo.add.v1", "scope": "organization", "purpose": "Runtime-managed projection of hiring recommendations onto this Chief's personal board" },
     { "name": "work.personal-todo.reorder.v1", "scope": "organization", "purpose": "Reorder directly managed personal work" },
@@ -70,6 +72,7 @@
   ],
   "events": {
     "subscribes": [
+      "com.csweet.agent.configuration-choice.answered.v1",
       "com.csweet.work.personal-todo.available.v1",
       "com.csweet.communication.message.mentioned.v1",
       "com.csweet.agent.onboarded.v1",
