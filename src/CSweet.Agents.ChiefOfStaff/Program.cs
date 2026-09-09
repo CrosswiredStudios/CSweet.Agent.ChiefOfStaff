@@ -9,6 +9,11 @@ var manifest = await AgentManifestLoader.LoadAsync("csweet-plugin.json", Cancell
 if (manifest.Id != ChiefOfStaffProfile.AgentId || manifest.Version != ChiefOfStaffProfile.Version)
     throw new InvalidOperationException("The Chief of Staff implementation identity does not match csweet-plugin.json.");
 
+if (args.Contains("--self-test", StringComparer.Ordinal))
+{
+    Console.WriteLine($"{manifest.Id} {manifest.Version} self-test passed.");
+    return;
+}
 builder.AddCSweetAgent<ChiefOfStaffAgent>();
 builder.Services.AddSingleton<ChiefOfStaffOrchestrator>();
 
