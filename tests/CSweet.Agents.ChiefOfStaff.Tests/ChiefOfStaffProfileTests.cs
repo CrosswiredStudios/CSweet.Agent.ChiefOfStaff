@@ -204,8 +204,109 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("suggest_user_action", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one concise notice", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("once per new or increased role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("explicitly replaces a surfaced hiring suggestion", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("names the replacement role", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Never ask a question in the same response that makes a recommendation", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("do not ask for information merely because a profile field is incomplete", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ReplacementTurn_AttachesTheNewTopRecommendationWithoutATitleMention()
+    {
+        var recommendation = NewRecommendation("Software Developer");
+        var (runtime, suggested) = CreateAttachmentRuntime(recommendation);
+        var agent = CreateAgent();
+        var turnId = Guid.NewGuid();
+
+        await Assert.ThrowsAsync<PlatformCapabilityException>(() => agent.AttachMentionedHiringActionAsync(
+            turnId,
+            "Done - the plan now targets a different role.",
+            "user-message:test",
+            runtime.CreateContext(),
+            new HashSet<Guid> { Guid.NewGuid() },
+            CancellationToken.None));
+
+        var request = Assert.Single(suggested);
+        Assert.Equal(turnId, request.ChatTurnId);
+        Assert.Equal("Software Developer", request.Parameters.GetProperty("role").GetString());
+        Assert.Equal(recommendation.Id, request.Parameters.GetProperty("recommendationId").GetGuid());
+    }
+
+    [Fact]
+    public async Task UnchangedBacklog_WithoutTitleMention_DoesNotAttachASuggestion()
+    {
+        var recommendation = NewRecommendation("Creative Director");
+        var (runtime, suggested) = CreateAttachmentRuntime(recommendation);
+        var agent = CreateAgent();
+
+        await agent.AttachMentionedHiringActionAsync(
+            Guid.NewGuid(),
+            "Nothing changed in the backlog this turn.",
+            "user-message:test",
+            runtime.CreateContext(),
+            new HashSet<Guid> { recommendation.Id },
+            CancellationToken.None);
+
+        Assert.Empty(suggested);
+    }
+
+    [Fact]
+    public async Task MentionedTopRecommendation_StillAttachesASuggestion()
+    {
+        var recommendation = NewRecommendation("Creative Director");
+        var (runtime, suggested) = CreateAttachmentRuntime(recommendation);
+        var agent = CreateAgent();
+
+        await Assert.ThrowsAsync<PlatformCapabilityException>(() => agent.AttachMentionedHiringActionAsync(
+            Guid.NewGuid(),
+            "I recommend a Creative Director as the next hire.",
+            "user-message:test",
+            runtime.CreateContext(),
+            new HashSet<Guid> { recommendation.Id },
+            CancellationToken.None));
+
+        Assert.Single(suggested);
+    }
+
+    private static ChiefOfStaffAgent CreateAgent() => new(
+        NullLogger<ChiefOfStaffAgent>.Instance,
+        new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
+
+    private static HiringRecommendationResponse NewRecommendation(string title) =>
+        new(
+            Guid.NewGuid(),
+            null,
+            title,
+            "Own the outcome.",
+            "Suggested",
+            null,
+            [],
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow)
+        {
+            Priority = 1
+        };
+
+    private static (AgentTestRuntime Runtime, List<SuggestUserActionRequest> Suggested) CreateAttachmentRuntime(
+        HiringRecommendationResponse recommendation)
+    {
+        var suggested = new List<SuggestUserActionRequest>();
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<JsonElement, HiringBacklogResponse>(
+                PlatformCapabilities.HiringRecommendationList,
+                (_, _) => Task.FromResult(new HiringBacklogResponse([recommendation])))
+            .RegisterCapability<SuggestUserActionRequest, SuggestedUserActionResponse>(
+                PlatformCapabilities.UserActionSuggest,
+                (request, _) =>
+                {
+                    suggested.Add(request);
+                    return Task.FromException<SuggestedUserActionResponse>(
+                        new PlatformCapabilityException(
+                            PlatformCapabilities.UserActionSuggest,
+                            PlatformCapabilityErrorCode.ValidationFailed,
+                            "Captured for the assertion."));
+                });
+        return (runtime, suggested);
     }
 
     [Fact]

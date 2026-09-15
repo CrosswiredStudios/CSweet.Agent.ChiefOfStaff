@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -70,7 +70,7 @@
     { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Managers sharing the Chief's CEO manager" }
     ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
     ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
-    ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision" }
+    ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision or explicitly replaced by the owner" }
     ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
     ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
     ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" }

@@ -3,7 +3,7 @@
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `2.5.0` and manifest protocol `2.0`.
+package version `2.6.0` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 3.40.0; manifest-audit tests reject names missing from that catalog.
@@ -66,8 +66,7 @@ policy at runtime.
 |---|---|---|
 | `platform.hiring-recommendation.list.v1` | organization | Read this Chief installation's ranked role backlog. |
 | `platform.hiring-recommendation.upsert.v1` | organization | Maintain ranked hiring recommendations. |
-| `platform.hiring-recommendation.resolve.v1` | organization | Resolve a matching role suggestion after a hire event. |
-| `platform.hiring-recommendation.withdraw.v1` | organization | Withdraw a suggestion removed by a later approved team snapshot. |
+| `platform.hiring-recommendation.withdraw.v1` | organization | Withdraw a suggestion removed by a later approved team snapshot or explicitly replaced by the owner. |
 | `platform.management.resource-change.read.v1` | organization | Read authoritative resource-change requests and approved snapshots. |
 | `platform.management.resource-change.decide.v1` | organization | Decide a request only when this Chief is the requester's current manager. |
 | `platform.user-action.suggest.v1` | organization | Attach a platform-resolved Marketplace action to a Chief message. |
@@ -79,6 +78,11 @@ Chief sends the CEO one idempotent combined brief for the
 complete change set and creates one separately actionable Marketplace CTA system message per new
 or increased role. Recommendation-scoped idempotency keys prevent event retries from duplicating
 those CTA messages.
+
+When the owner explicitly replaces a suggested role, the Chief withdraws the superseded
+recommendation, upserts the replacement at priority 1, and replies with one short sentence naming
+the new role. The platform marks the superseded Marketplace suggestion as replaced by the new role,
+so its widget turns into a muted cancelled tile and the new role gets its own widget.
 
 ### Memory
 

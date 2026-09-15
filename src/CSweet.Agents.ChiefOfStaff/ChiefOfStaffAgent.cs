@@ -180,6 +180,22 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
             incoming.ProviderProfileId,
             incoming.Message.Length);
 
+        // The backlog is snapshotted before the model runs so a recommendation that only appears
+        // during this turn (for example, the owner replaces a suggested role) is recognized as new.
+        HashSet<Guid>? knownRecommendationIds = null;
+        try
+        {
+            var backlogBefore = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
+            knownRecommendationIds = backlogBefore.Recommendations.Select(x => x.Id).ToHashSet();
+        }
+        catch (PlatformCapabilityException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not snapshot the hiring backlog before turn {TurnId}.",
+                incoming.TurnId);
+        }
+
         try
         {
             await foreach (var update in StreamAssistantDeltasAsync(
@@ -295,19 +311,41 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
         await turnStream.ActivityStartedAsync(
             "Validating executive follow-up actions.",
             cancellationToken: cancellationToken);
-        await EnsureDefaultProductManagerRecommendationAsync(
-            response,
-            requestedWorkstreamId,
-            $"user-message:{message.EventId:N}",
-            context,
-            cancellationToken);
-        await SyncHiringPersonalTodosAsync(
-            context,
-            Guid.TryParse(incoming.ConversationId, out var sourceConversationId)
-                ? sourceConversationId
-                : null,
-            incoming.MessageId == Guid.Empty ? null : incoming.MessageId,
-            cancellationToken);
+        // These steps refine durable side effects after the answer exists. A failure here must not
+        // replace the committed reply with the platform's generic fallback, so each step degrades alone.
+        try
+        {
+            await EnsureDefaultProductManagerRecommendationAsync(
+                response,
+                requestedWorkstreamId,
+                $"user-message:{message.EventId:N}",
+                context,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not validate the default product-manager recommendation for conversation {ConversationId}.",
+                conversationId);
+        }
+        try
+        {
+            await SyncHiringPersonalTodosAsync(
+                context,
+                Guid.TryParse(incoming.ConversationId, out var sourceConversationId)
+                    ? sourceConversationId
+                    : null,
+                incoming.MessageId == Guid.Empty ? null : incoming.MessageId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not sync hiring personal todos for conversation {ConversationId}.",
+                conversationId);
+        }
         await turnStream.ActivityCompletedAsync(
             "Validated executive follow-up actions.",
             cancellationToken: cancellationToken);
@@ -333,6 +371,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
                 response,
                 $"user-message:{message.EventId}",
                 context,
+                knownRecommendationIds,
                 cancellationToken);
         }
         catch (Exception exception)
@@ -354,7 +393,17 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
             failureMessage: null,
             cancellationToken);
 
-        await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+        try
+        {
+            await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Chief of Staff could not push product-management context updates after conversation {ConversationId}.",
+                conversationId);
+        }
     }
 
     public override async Task<PersonalTodoResult> HandlePersonalTodoAsync(
@@ -1048,7 +1097,11 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
         if (backlog.Recommendations.Count == 0) return;
         if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
-            throw new InvalidOperationException("The Chief of Staff employee identity is unavailable.");
+        {
+            _logger.LogWarning(
+                "Chief of Staff skipped hiring personal-todo sync because the employee identity is unavailable.");
+            return;
+        }
 
         var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
         var board = directory.Boards.SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId);
@@ -1233,11 +1286,12 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         }
     }
 
-    private async Task AttachMentionedHiringActionAsync(
+    internal async Task AttachMentionedHiringActionAsync(
         Guid chatTurnId,
         string response,
         string idempotencyPrefix,
         AgentRuntimeContext context,
+        IReadOnlySet<Guid>? knownRecommendationIds,
         CancellationToken cancellationToken)
     {
         if (chatTurnId == Guid.Empty || string.IsNullOrWhiteSpace(response)) return;
@@ -1246,8 +1300,14 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.CreatedAt)
             .FirstOrDefault();
-        if (next is null ||
-            !response.Contains(next.Title, StringComparison.OrdinalIgnoreCase))
+        if (next is null) return;
+        var mentioned = response.Contains(next.Title, StringComparison.OrdinalIgnoreCase);
+        // A recommendation that appears only during this turn (for example, the owner replaced the
+        // previously suggested role) is a deliberate backlog change, so attach its CTA even when a
+        // short confirmation does not repeat the role title verbatim.
+        var becameTopThisTurn = knownRecommendationIds is not null &&
+                                !knownRecommendationIds.Contains(next.Id);
+        if (!mentioned && !becameTopThisTurn)
             return;
 
         _ = await context.Platform.SuggestUserActionAsync(
