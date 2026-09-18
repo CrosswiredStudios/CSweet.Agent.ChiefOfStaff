@@ -880,6 +880,8 @@ What type of business are you building?
         SendCommunicationMessageRequest? sent = null;
         SuggestUserActionRequest? suggested = null;
         var runtime = new AgentTestRuntime()
+            .RegisterCapability<object, IReadOnlyList<ProjectIntakeSummary>>(ProjectIntakeCapabilities.AssistanceList,
+                (_, _) => Task.FromResult<IReadOnlyList<ProjectIntakeSummary>>([]))
             .RegisterCapability<object, PersonalTodoDirectory>(
                 PersonalTodoCapabilities.Read,
                 (_, _) => Task.FromResult(new PersonalTodoDirectory([], chiefId)))
@@ -1025,6 +1027,8 @@ What type of business are you building?
         };
         RequeuePersonalTodoItemRequest? resumed = null;
         var runtime = new AgentTestRuntime()
+            .RegisterCapability<object, IReadOnlyList<ProjectIntakeSummary>>(ProjectIntakeCapabilities.AssistanceList,
+                (_, _) => Task.FromResult<IReadOnlyList<ProjectIntakeSummary>>([]))
             .RegisterCapability<object, PersonalTodoDirectory>(
                 PersonalTodoCapabilities.Read,
                 (_, _) => Task.FromResult(new PersonalTodoDirectory(

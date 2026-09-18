@@ -43,6 +43,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        await ResumeProjectAssistanceAsync(context, cancellationToken);
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
         _logger.LogInformation(
             "Chief of Staff reconciled its personal hiring queue during {ActivationReason} activation {TickId}.",
@@ -103,6 +104,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
         if (string.Equals(message.EventType, ChiefOfStaffProfile.RecommendationFulfilledEvent, StringComparison.Ordinal))
         {
             await HandleRecommendationFulfilledAsync(message, context, cancellationToken);
+            await ResumeProjectAssistanceAsync(context, cancellationToken);
             return;
         }
 

@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -26,6 +26,12 @@
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
   "requires": [
+    {"name":"work.project-intake.assistance-list.v1","scope":"organization","purpose":"Recover assigned project-manager assistance after hiring or reconnect."},
+    {"name": "work.project-intake.staffing.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
+    {"name": "communication.coordination.read.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
+    {"name": "communication.coordination.respond.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
+    {"name": "communication.coordination.start.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
+
     {"name": "work.calendar.read.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
     {"name": "work.calendar.create.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
     {"name": "work.calendar.update.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
