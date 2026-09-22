@@ -9,6 +9,18 @@ namespace CSweet.Agents.ChiefOfStaff.Tests;
 public sealed class ChiefOfStaffProfileTests
 {
     [Fact]
+    public void OutputBudgetAcceptsModelSupportedValues()
+    {
+        var settings = new AgentSettings(new Dictionary<string, JsonElement>
+        {
+            ["maxContextWindowTokens"] = JsonSerializer.SerializeToElement(220_000),
+            ["maxOutputTokens"] = JsonSerializer.SerializeToElement(128_000)
+        });
+
+        Assert.Equal(128_000, ChiefOfStaffAgent.ResolveOutputTokens(settings));
+    }
+
+    [Fact]
     public void Agent_ReconcilesHiringTodosWhenItsSdkRuntimeActivates()
     {
         Assert.Contains(
@@ -156,6 +168,10 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Equal([
             "llmProviderId", "llmModel", "maxContextWindowTokens", "maxOutputTokens", "businessOperatingProfile", "customBusinessDescription"
         ], configurationKeys);
+        var tokenFields = manifest.RootElement.GetProperty("configuration").EnumerateArray()
+            .Where(field => field.GetProperty("key").GetString() is
+                "maxContextWindowTokens" or "maxOutputTokens");
+        Assert.All(tokenFields, field => Assert.False(field.TryGetProperty("maximum", out _)));
         var customDescription = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Single(x => x.GetProperty("key").GetString() == "customBusinessDescription");
         Assert.True(customDescription.GetProperty("required").GetBoolean());
