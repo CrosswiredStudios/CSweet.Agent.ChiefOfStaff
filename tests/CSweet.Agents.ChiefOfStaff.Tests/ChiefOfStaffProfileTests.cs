@@ -154,7 +154,7 @@ public sealed class ChiefOfStaffProfileTests
         var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Select(x => x.GetProperty("key").GetString()).ToList();
         Assert.Equal([
-            "llmProviderId", "llmModel", "businessOperatingProfile", "customBusinessDescription"
+            "llmProviderId", "llmModel", "maxContextWindowTokens", "maxOutputTokens", "businessOperatingProfile", "customBusinessDescription"
         ], configurationKeys);
         var customDescription = manifest.RootElement.GetProperty("configuration").EnumerateArray()
             .Single(x => x.GetProperty("key").GetString() == "customBusinessDescription");

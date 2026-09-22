@@ -3,7 +3,7 @@
   "kind": "agent",
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -105,6 +105,31 @@
   "configuration": [
     { "key": "llmProviderId", "type": "provider", "label": "LLM provider", "required": true, "secret": false },
     { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false, "dependsOnFieldKey": "llmProviderId" },
+    {
+      "key": "maxContextWindowTokens",
+      "type": "number",
+      "label": "Maximum context-window tokens",
+      "required": true,
+      "secret": false,
+      "description": "Planning ceiling for Chief of Staff model requests; set this no higher than the selected model's real context window.",
+      "minimum": 32769,
+      "maximum": 2000000,
+      "step": 1000,
+      "defaultValue": 220000
+    },
+    {
+      "key": "maxOutputTokens",
+      "type": "number",
+      "label": "Maximum output tokens",
+      "required": true,
+      "secret": false,
+      "description": "Budget for each Chief of Staff model response, including reasoning. The provider may impose a lower ceiling.",
+      "minimum": 2048,
+      "maximum": 32768,
+      "step": 1000,
+      "defaultValue": 32000,
+      "lessThanFieldKey": "maxContextWindowTokens"
+    },
     { "key": "businessOperatingProfile", "type": "select", "label": "Business operating profile", "required": true, "secret": false, "defaultValue": "general", "description": "Applies business-type organizational defaults while preserving the Chief's core boundaries.", "options": [
       { "value": "general", "label": "General" },
       { "value": "game-studio", "label": "Game Studio" },

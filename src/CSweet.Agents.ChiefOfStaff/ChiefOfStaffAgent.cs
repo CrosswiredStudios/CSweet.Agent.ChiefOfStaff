@@ -18,6 +18,11 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
     private readonly ILogger<ChiefOfStaffAgent> _logger;
     private readonly ChiefOfStaffOrchestrator _orchestrator;
 
+    internal const int DefaultContextWindowTokens = 220_000;
+    internal const int DefaultOutputTokens = 32_000;
+    private const int MinimumOutputTokens = 2_048;
+    private const int MaximumOutputTokens = 32_768;
+
     public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger, ChiefOfStaffOrchestrator orchestrator)
     {
         _logger = logger;
@@ -67,6 +72,25 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
                 dependsOnFieldKey: "llmProviderId",
                 required: true,
                 description: "Selects the chat model to use from the chosen provider profile.")
+            .Number(
+                "maxContextWindowTokens",
+                "Maximum context-window tokens",
+                required: true,
+                description: "Planning ceiling for Chief of Staff model requests; set this no higher than the selected model's real context window.",
+                minimum: 32_769,
+                maximum: 2_000_000,
+                step: 1_000,
+                defaultValue: DefaultContextWindowTokens)
+            .Number(
+                "maxOutputTokens",
+                "Maximum output tokens",
+                required: true,
+                description: "Budget for each Chief of Staff model response, including reasoning. The provider may impose a lower ceiling.",
+                minimum: MinimumOutputTokens,
+                maximum: MaximumOutputTokens,
+                step: 1_000,
+                defaultValue: DefaultOutputTokens,
+                lessThanFieldKey: "maxContextWindowTokens")
             .Select(
                 BusinessOperatingProfiles.ConfigurationKey,
                 "Business Operating Profile",
@@ -82,6 +106,15 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
                 placeholder: "Describe the business model and any unusual organizational needs.",
                 visibleWhenFieldKey: BusinessOperatingProfiles.ConfigurationKey,
                 visibleWhenValue: "custom");
+    }
+
+    internal static int ResolveOutputTokens(AgentSettings settings)
+    {
+        var contextWindow = Math.Max(settings.GetInt32("maxContextWindowTokens", DefaultContextWindowTokens),
+            MinimumOutputTokens + 1);
+        var output = Math.Clamp(settings.GetInt32("maxOutputTokens", DefaultOutputTokens),
+            MinimumOutputTokens, MaximumOutputTokens);
+        return Math.Min(output, contextWindow - 1);
     }
 
     public override async Task HandleEventAsync(
@@ -1643,7 +1676,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                     Reasoning = new ReasoningOptions
                     {
                         Output = ReasoningOutput.Full
-                    }
+                    },
+                    MaxOutputTokens = ResolveOutputTokens(Settings)
                 }, cancellationToken),
                 AIContextProviders = useAgentMemory ? [memoryProvider] : []
             });
