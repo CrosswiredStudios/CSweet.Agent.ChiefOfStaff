@@ -2,10 +2,13 @@ using System.Text.Json;
 using CSweet.Agent.SDK;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.AI;
+using CSweet.Agents.ChiefOfStaff.Agent;
+using CSweet.Agents.ChiefOfStaff.Contracts;
+using CSweet.Agents.ChiefOfStaff.Profiles;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Orchestration;
 
-public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> logger)
+public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> logger) : IChiefOfStaffOrchestrator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private static readonly HashSet<string> CapturableFields = new(StringComparer.OrdinalIgnoreCase)
@@ -306,17 +309,6 @@ OWNER MESSAGE:
             padded.Contains(signal, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool HasActiveProductManager(OrganizationSnapshotResponse? organization) =>
-        organization?.People.Any(person =>
-        {
-            if (!person.IsActive) return false;
-            var roleName = person.RoleId.HasValue
-                ? organization.Roles.SingleOrDefault(role => role.Id == person.RoleId.Value)?.Name
-                : null;
-            return (roleName?.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                   person.DisplayName.Contains("Product Manager", StringComparison.OrdinalIgnoreCase);
-        }) == true;
-
     public static ProductRoleBriefResponse BuildProductRoleBrief(
         ChiefOperatingContext context,
         Guid chiefOrganizationUserId,
@@ -447,11 +439,6 @@ OWNER MESSAGE:
         "exit" => "Exit",
         _ => stage
     };
-
-    private static string LowercaseFirst(string value) =>
-        string.IsNullOrEmpty(value) || char.IsLower(value[0])
-            ? value
-            : char.ToLowerInvariant(value[0]) + value[1..];
 
     private async Task<T?> TryAsync<T>(string capability, Func<CancellationToken, Task<T>> action, List<string> unavailable, CancellationToken token)
         where T : class

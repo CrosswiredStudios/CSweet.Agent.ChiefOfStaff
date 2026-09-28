@@ -1,19 +1,19 @@
 using CSweet.Agent.SDK;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Profiles;
 
-internal sealed record ChiefFocusOption(string Id, string Label, string Description);
+public sealed record ChiefFocusOption(string Id, string Label, string Description);
 
-internal sealed record LeadershipCoverageItem(string Id, string Title, string Description);
+public sealed record LeadershipCoverageItem(string Id, string Title, string Description);
 
-internal sealed record BusinessOperatingProfile(
+public sealed record BusinessOperatingProfile(
     string Key,
     string Label,
     string PromptOverlay,
     IReadOnlyList<ChiefFocusOption> FocusOptions,
     IReadOnlyList<LeadershipCoverageItem> LeadershipCoverage);
 
-internal static class BusinessOperatingProfiles
+public static class BusinessOperatingProfiles
 {
     public const string ConfigurationKey = "businessOperatingProfile";
     public const string CustomDescriptionKey = "customBusinessDescription";

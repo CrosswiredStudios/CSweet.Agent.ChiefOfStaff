@@ -1,6 +1,6 @@
 using CSweet.Agent.SDK;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Contracts;
 
 public sealed record SendCommunicationMessageRequest(
     Guid ChatId,

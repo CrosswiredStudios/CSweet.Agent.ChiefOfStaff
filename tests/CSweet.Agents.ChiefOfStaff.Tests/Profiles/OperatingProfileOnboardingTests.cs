@@ -1,10 +1,13 @@
 using System.Text.Json;
 using CSweet.Agent.SDK;
-using CSweet.Agents.ChiefOfStaff;
+using CSweet.Agents.ChiefOfStaff.Agent;
+using CSweet.Agents.ChiefOfStaff.Contracts;
+using CSweet.Agents.ChiefOfStaff.Orchestration;
+using CSweet.Agents.ChiefOfStaff.Profiles;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace CSweet.Agents.ChiefOfStaff.Tests;
+namespace CSweet.Agents.ChiefOfStaff.Tests.Profiles;
 
 public sealed class OperatingProfileOnboardingTests
 {

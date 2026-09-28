@@ -1,4 +1,4 @@
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Contracts;
 
 public sealed record ProductRoleBriefRequest(
     Guid ProductManagerOrganizationUserId,

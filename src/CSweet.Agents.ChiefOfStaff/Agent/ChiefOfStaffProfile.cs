@@ -1,6 +1,6 @@
 using CSweet.Agent.SDK;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public static class ChiefOfStaffProfile
 {

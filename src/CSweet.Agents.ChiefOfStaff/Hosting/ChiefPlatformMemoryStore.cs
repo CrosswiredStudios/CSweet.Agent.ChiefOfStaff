@@ -1,7 +1,7 @@
 using CSweet.Agent.SDK;
 using CSweet.Memory;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Hosting;
 
 /// <summary>
 /// Keeps the agent compatible with the published memory abstractions while all

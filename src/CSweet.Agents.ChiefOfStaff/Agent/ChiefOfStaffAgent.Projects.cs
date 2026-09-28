@@ -1,6 +1,6 @@
 using System.Text.Json;
 using CSweet.Agent.SDK;
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public sealed partial class ChiefOfStaffAgent
 {

@@ -1,6 +1,9 @@
 using CSweet.Agent.SDK;
 
-namespace CSweet.Agents.ChiefOfStaff.Tests;
+using CSweet.Agents.ChiefOfStaff.Agent;
+using CSweet.Agents.ChiefOfStaff.Policies;
+
+namespace CSweet.Agents.ChiefOfStaff.Tests.Policies;
 
 public sealed class GameStudioOwnershipPolicyTests
 {

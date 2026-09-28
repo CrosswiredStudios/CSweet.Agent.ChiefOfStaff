@@ -1,8 +1,10 @@
 using System.Text.Json;
 using CSweet.Agent.SDK;
 using Microsoft.Extensions.AI;
+using CSweet.Agents.ChiefOfStaff.Contracts;
+using CSweet.Agents.ChiefOfStaff.Profiles;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public sealed partial class ChiefOfStaffAgent
 {

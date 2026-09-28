@@ -1,10 +1,13 @@
-using CSweet.Agents.ChiefOfStaff;
+using CSweet.Agents.ChiefOfStaff.Agent;
+using CSweet.Agents.ChiefOfStaff.Contracts;
+using CSweet.Agents.ChiefOfStaff.Formatting;
+using CSweet.Agents.ChiefOfStaff.Orchestration;
 using CSweet.Agent.SDK;
 using CSweet.WorkManagement.Contracts;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace CSweet.Agents.ChiefOfStaff.Tests;
+namespace CSweet.Agents.ChiefOfStaff.Tests.Agent;
 
 public sealed class ChiefOfStaffProfileTests
 {

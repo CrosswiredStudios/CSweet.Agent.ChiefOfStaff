@@ -9,33 +9,65 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CSweet.Memory;
 using CSweet.WorkManagement.Contracts;
+using CSweet.Agents.ChiefOfStaff.Contracts;
+using CSweet.Agents.ChiefOfStaff.Formatting;
+using CSweet.Agents.ChiefOfStaff.Hosting;
+using CSweet.Agents.ChiefOfStaff.Handlers;
+using CSweet.Agents.ChiefOfStaff.Orchestration;
+using CSweet.Agents.ChiefOfStaff.Policies;
+using CSweet.Agents.ChiefOfStaff.Profiles;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
 {
     private readonly IAgentLlmClientFactory? _llmClientFactory;
     private readonly ILogger<ChiefOfStaffAgent> _logger;
-    private readonly ChiefOfStaffOrchestrator _orchestrator;
+    private readonly IChiefOfStaffOrchestrator _orchestrator;
+    private readonly IReadOnlyList<ICapabilityHandler> _capabilityHandlers;
+    private readonly IReadOnlyList<IAgentEventHandler> _eventHandlers;
 
     internal const int DefaultContextWindowTokens = 220_000;
     internal const int DefaultOutputTokens = 32_000;
     private const int MinimumOutputTokens = 2_048;
 
-    public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger, ChiefOfStaffOrchestrator orchestrator)
+    public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger, IChiefOfStaffOrchestrator orchestrator)
+        : this(logger, orchestrator, [], [])
     {
-        _logger = logger;
-        _orchestrator = orchestrator;
     }
 
     public ChiefOfStaffAgent(
         IAgentLlmClientFactory llmClientFactory,
         ILogger<ChiefOfStaffAgent> logger,
-        ChiefOfStaffOrchestrator orchestrator)
+        IChiefOfStaffOrchestrator orchestrator)
+        : this(llmClientFactory, logger, orchestrator, [], [])
+    {
+    }
+
+    public ChiefOfStaffAgent(
+        ILogger<ChiefOfStaffAgent> logger,
+        IChiefOfStaffOrchestrator orchestrator,
+        IReadOnlyList<ICapabilityHandler> capabilityHandlers,
+        IReadOnlyList<IAgentEventHandler> eventHandlers)
+    {
+        _logger = logger;
+        _orchestrator = orchestrator;
+        _capabilityHandlers = capabilityHandlers;
+        _eventHandlers = eventHandlers;
+    }
+
+    public ChiefOfStaffAgent(
+        IAgentLlmClientFactory llmClientFactory,
+        ILogger<ChiefOfStaffAgent> logger,
+        IChiefOfStaffOrchestrator orchestrator,
+        IReadOnlyList<ICapabilityHandler> capabilityHandlers,
+        IReadOnlyList<IAgentEventHandler> eventHandlers)
     {
         _llmClientFactory = llmClientFactory;
         _logger = logger;
         _orchestrator = orchestrator;
+        _capabilityHandlers = capabilityHandlers;
+        _eventHandlers = eventHandlers;
     }
 
     public override string AgentId => ChiefOfStaffProfile.AgentId;
@@ -119,6 +151,14 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        foreach (var handler in _eventHandlers)
+        {
+            if (!string.Equals(handler.EventType, message.EventType, StringComparison.Ordinal))
+                continue;
+            if (await handler.HandleAsync(message, context, cancellationToken))
+                return;
+        }
+
         if (message.EventType == ConfigurationChoiceAnsweredEvent)
         {
             await HandleConfigurationChoiceAnsweredAsync(message, context, cancellationToken);
@@ -293,16 +333,6 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
                 conversationId);
 
             await turnStream.FailAsync(BuildSafeFailureMessage(exception), cancellationToken);
-            await WriteRunLogAsync(
-                incoming.ProviderProfileId,
-                incoming.Message,
-                output: null,
-                status: "Failed",
-                startedAt,
-                stopwatch.ElapsedMilliseconds,
-                usage: null,
-                exception.Message,
-                cancellationToken);
             return;
         }
 
@@ -318,16 +348,6 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
 
             await turnStream.FailAsync(
                 "The Chief of Staff could not complete the request because the model provider returned an empty response.",
-                cancellationToken);
-            await WriteRunLogAsync(
-                incoming.ProviderProfileId,
-                incoming.Message,
-                output: null,
-                status: "Failed",
-                startedAt,
-                stopwatch.ElapsedMilliseconds,
-                usage,
-                "The model provider returned an empty response.",
                 cancellationToken);
             return;
         }
@@ -414,17 +434,6 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
                 incoming.TurnId);
         }
 
-        await WriteRunLogAsync(
-            incoming.ProviderProfileId,
-            incoming.Message,
-            response,
-            "Completed",
-            startedAt,
-            stopwatch.ElapsedMilliseconds,
-            usage,
-            failureMessage: null,
-            cancellationToken);
-
         try
         {
             await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
@@ -490,6 +499,12 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        foreach (var handler in _capabilityHandlers)
+        {
+            if (string.Equals(handler.Capability, request.Capability, StringComparison.Ordinal))
+                return await handler.HandleAsync(request, context, cancellationToken);
+        }
+
         if (!IsSupportedCapability(request.Capability))
         {
             return AgentWorkResult.Failure(
@@ -1006,9 +1021,9 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
-        var recommendsProductManager = SplitResponseSegments(response).Any(segment =>
+        var recommendsProductManager = SharedFormatter.SplitResponseSegments(response).Any(segment =>
             segment.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) &&
-            IsHiringRecommendationLine(segment));
+            SharedFormatter.IsHiringRecommendationLine(segment));
         if (!recommendsProductManager) return;
 
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
@@ -1045,9 +1060,9 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 BusinessOperatingProfiles.Resolve(Settings).Key,
                 "game-studio",
                 StringComparison.Ordinal) ||
-            !SplitResponseSegments(response).Any(segment =>
+            !SharedFormatter.SplitResponseSegments(response).Any(segment =>
                 segment.Contains("Game Producer", StringComparison.OrdinalIgnoreCase) &&
-                IsHiringRecommendationLine(segment)))
+                SharedFormatter.IsHiringRecommendationLine(segment)))
             return response;
 
         var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
@@ -1410,115 +1425,13 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             ?? throw new InvalidOperationException("The Chief has no protected owner conversation.");
     }
 
-    internal static string NormalizeRoleIdentity(string value)
-    {
-        var cleaned = value.Trim();
-        if (cleaned.EndsWith("(Agent)", StringComparison.OrdinalIgnoreCase))
-            cleaned = cleaned[..^"(Agent)".Length].TrimEnd();
-        return new string(cleaned
-            .ToLowerInvariant()
-            .Where(char.IsLetterOrDigit)
-            .ToArray());
-    }
+    private static readonly ResponsePolicyFormatter SharedFormatter = new();
 
-    internal static string FormatOnboardingMessage(string value)
-    {
-        var lines = EnforceResponseMode(value)
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n')
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .ToList();
-        if (lines.Count == 0) return string.Empty;
+    internal static string NormalizeRoleIdentity(string value) => SharedFormatter.NormalizeRoleIdentity(value);
 
-        var containsRecommendation = lines.Any(IsHiringRecommendationLine);
-        var sections = new List<string>(lines.Count + 2);
-        foreach (var line in lines)
-        {
-            if (containsRecommendation && line.EndsWith("?", StringComparison.Ordinal))
-                continue;
+    internal static string FormatOnboardingMessage(string value) => SharedFormatter.FormatOnboardingMessage(value);
 
-            if (line.StartsWith("Role Map:", StringComparison.OrdinalIgnoreCase))
-            {
-                sections.Add($"- **Role map:** {line["Role Map:".Length..].Trim()}");
-                continue;
-            }
-            if (line.StartsWith("Priority 1 Hire:", StringComparison.OrdinalIgnoreCase))
-            {
-                sections.Add($"- **Priority 1 hire:** {line["Priority 1 Hire:".Length..].Trim()}");
-                continue;
-            }
-            if (line.EndsWith("?", StringComparison.Ordinal))
-            {
-                sections.Add($"**Question for you**\n\n{line}");
-                continue;
-            }
-
-            sections.Add(line);
-        }
-
-        return string.Join("\n\n", sections);
-    }
-
-    private static bool IsHiringRecommendationLine(string line)
-    {
-        if (line.TrimEnd().EndsWith("?", StringComparison.Ordinal) ||
-            line.Contains("cannot recommend", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("can't recommend", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("unable to recommend", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("before I recommend", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("before I can recommend", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return
-            line.StartsWith("Priority 1 Hire:", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("priority-one hire", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("priority 1 hire", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("first hire", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("highest priority is to hire", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("should hire", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("recommend a ", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("recommend an ", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("I recommend", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("hiring backlog", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("browse candidates", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("browse marketplace", StringComparison.OrdinalIgnoreCase);
-    }
-
-    internal static string EnforceResponseMode(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-
-        var normalized = value.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var lines = normalized.Split('\n');
-        if (!SplitResponseSegments(normalized).Any(IsHiringRecommendationLine)) return value;
-
-        var retained = new List<string>(lines.Length);
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Contains("Question for you", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var parts = System.Text.RegularExpressions.Regex.Split(
-                line,
-                @"(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            var statements = parts
-                .Where(part => !part.TrimEnd().EndsWith("?", StringComparison.Ordinal))
-                .ToList();
-            if (statements.Count > 0)
-                retained.Add(string.Join(" ", statements));
-        }
-
-        return string.Join("\n", retained).Trim();
-    }
-
-    private static IEnumerable<string> SplitResponseSegments(string value) =>
-        System.Text.RegularExpressions.Regex.Split(
-            value,
-            @"\n|(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    internal static string EnforceResponseMode(string value) => SharedFormatter.EnforceResponseMode(value);
 
     private static Task PublishChunkAsync(
         AgentRuntimeContext context,
@@ -2055,18 +1968,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             report,
             cancellationToken);
     }
-
-    private static Task WriteRunLogAsync(
-        Guid providerProfileId,
-        string prompt,
-        string? output,
-        string status,
-        DateTimeOffset startedAt,
-        long durationMs,
-        UsageDetails? usage,
-        string? failureMessage,
-        CancellationToken cancellationToken)
-        => Task.CompletedTask;
 
     private static UsageDetails? ExtractUsage(IEnumerable<AIContent> contents)
     {

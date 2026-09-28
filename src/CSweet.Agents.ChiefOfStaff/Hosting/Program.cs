@@ -1,5 +1,9 @@
 using CSweet.Agent.SDK;
-using CSweet.Agents.ChiefOfStaff;
+using CSweet.Agents.ChiefOfStaff.Agent;
+using CSweet.Agents.ChiefOfStaff.Formatting;
+using CSweet.Agents.ChiefOfStaff.Orchestration;
+using CSweet.Agents.ChiefOfStaff.Policies;
+using CSweet.Agents.ChiefOfStaff.Profiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -15,7 +19,12 @@ if (args.Contains("--self-test", StringComparer.Ordinal))
     return;
 }
 builder.AddCSweetAgent<ChiefOfStaffAgent>();
+builder.Services.AddSingleton<IChiefOfStaffOrchestrator, ChiefOfStaffOrchestrator>();
 builder.Services.AddSingleton<ChiefOfStaffOrchestrator>();
+builder.Services.AddSingleton<IOperatingProfileRegistry, DefaultOperatingProfileRegistry>();
+builder.Services.AddSingleton<IGameStudioOwnershipPolicy, DefaultGameStudioOwnershipPolicy>();
+builder.Services.AddSingleton<IManagerSelector<ProjectManagerCandidate>, LowestIdManagerSelector>();
+builder.Services.AddSingleton<IResponsePolicyFormatter, ResponsePolicyFormatter>();
 
 var host = builder.Build();
 host.Run();

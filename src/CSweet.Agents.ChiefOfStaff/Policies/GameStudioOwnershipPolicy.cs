@@ -1,15 +1,16 @@
 using CSweet.Agent.SDK;
+using CSweet.Agents.ChiefOfStaff.Formatting;
 
-namespace CSweet.Agents.ChiefOfStaff;
+namespace CSweet.Agents.ChiefOfStaff.Policies;
 
-internal enum GameProducerOwnershipDecision
+public enum GameProducerOwnershipDecision
 {
     Allow,
     DelegateToCreativeDirector,
     ClarifyProject
 }
 
-internal static class GameStudioOwnershipPolicy
+public static class GameStudioOwnershipPolicy
 {
     internal static GameProducerOwnershipDecision Assess(
         OrganizationSnapshotResponse? organization,
@@ -52,18 +53,20 @@ internal static class GameStudioOwnershipPolicy
             : GameProducerOwnershipDecision.DelegateToCreativeDirector;
     }
 
+    private static readonly ResponsePolicyFormatter Formatter = new();
+
     internal static bool IsCreativeDirectorRole(string? roleKey, string? title)
     {
-        var normalizedKey = ChiefOfStaffAgent.NormalizeRoleIdentity(roleKey ?? string.Empty);
-        var normalizedTitle = ChiefOfStaffAgent.NormalizeRoleIdentity(title ?? string.Empty);
+        var normalizedKey = Formatter.NormalizeRoleIdentity(roleKey ?? string.Empty);
+        var normalizedTitle = Formatter.NormalizeRoleIdentity(title ?? string.Empty);
         return normalizedKey is "creativedirector" or "gamedirector" or "videogamecreativedirector" ||
                normalizedTitle.Contains("creativedirector", StringComparison.Ordinal) ||
                normalizedTitle.Contains("gamedirector", StringComparison.Ordinal);
     }
 
     internal static bool IsGameProducer(HiringRecommendationResponse recommendation) =>
-        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.RoleKey ?? string.Empty) == "gameproducer" ||
-        ChiefOfStaffAgent.NormalizeRoleIdentity(recommendation.Title) is "gameproducer" or "videogameproducer";
+        Formatter.NormalizeRoleIdentity(recommendation.RoleKey ?? string.Empty) == "gameproducer" ||
+        Formatter.NormalizeRoleIdentity(recommendation.Title) is "gameproducer" or "videogameproducer";
 
     internal static bool IsConflictingChiefProductManager(
         HiringRecommendationResponse recommendation,

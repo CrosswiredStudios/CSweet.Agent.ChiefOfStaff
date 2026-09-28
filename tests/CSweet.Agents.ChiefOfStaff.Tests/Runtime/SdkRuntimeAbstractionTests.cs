@@ -1,6 +1,6 @@
 using CSweet.Agent.SDK;
 
-namespace CSweet.Agents.ChiefOfStaff.Tests;
+namespace CSweet.Agents.ChiefOfStaff.Tests.Runtime;
 
 public sealed class SdkRuntimeAbstractionTests
 {

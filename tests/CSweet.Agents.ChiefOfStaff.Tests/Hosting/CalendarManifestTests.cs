@@ -2,6 +2,8 @@ using System.Text.Json;
 using CSweet.WorkManagement.Contracts;
 using Xunit;
 
+namespace CSweet.Agents.ChiefOfStaff.Tests.Hosting;
+
 public sealed class CalendarManifestTests
 {
     [Fact]
