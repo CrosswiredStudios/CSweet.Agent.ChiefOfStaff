@@ -80,3 +80,26 @@ Requests business-scoped calendar read, create, update, cancel, and scheduling a
 ## Project prerequisite
 
 Handles typed project-manager assistance for retained intakes. Discovers current authorized requests, reserves an available compatible manager or creates one durable hiring recommendation, and recovers pending assistance after hiring and reconnect.
+
+## Project incident reporting
+
+Project-health and management-incident events are handled before ordinary workflow routing. The Producer
+reads sanitized project-scoped evidence and reports observed facts, likely causes, missing evidence, and a
+recommended action without invoking a model. Management agents forward operational failures outside their
+responsibility using the same incident identity. Attention reviews recover pending incidents after reconnect.
+
+The manifest requests incident read/forward capabilities; the Producer additionally requests health,
+diagnostics, and report capabilities. Approve these through the normal installation grant review. The
+platform enforces current project/reporting authority and advances unhandled hops after 15 minutes.
+No additional repair or automatic retry authority is requested.
+
+
+## Shared manager type
+
+The manifest declares `rolePolicy.baseType: "manager"` and `profile: "manager.v1"`.
+This agent derives from SDK `CSweetManagerAgentBase`; its job remains a specialized manager role.
+The shared base handles project-health/incident events and attention recovery before ordinary work.
+Diagnostic reads and assessment reports require the manifest's current approved project-health and
+incident grants. Monitoring covers current assigned projects only. The default diagnosis escalates;
+role-specific recovery can be added through `AssessIncidentAsync` using existing authorized operations.
+A recorded recovery request does not close the incident or extend its 15-minute escalation deadline.

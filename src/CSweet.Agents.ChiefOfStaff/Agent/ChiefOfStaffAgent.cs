@@ -19,8 +19,10 @@ using CSweet.Agents.ChiefOfStaff.Profiles;
 
 namespace CSweet.Agents.ChiefOfStaff.Agent;
 
-public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivationHandler
+public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentActivationHandler
 {
+    protected override string ManagementResponsibility => "executive coordination";
+
     private readonly IAgentLlmClientFactory? _llmClientFactory;
     private readonly ILogger<ChiefOfStaffAgent> _logger;
     private readonly IChiefOfStaffOrchestrator _orchestrator;
@@ -146,7 +148,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetAgentBase, IAgentActivatio
         return Math.Min(output, contextWindow - 1);
     }
 
-    public override async Task HandleEventAsync(
+    protected override async Task HandleManagerEventAsync(
         AgentEventEnvelope message,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)

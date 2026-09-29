@@ -1,9 +1,10 @@
 {
   "manifestVersion": "2.0",
   "kind": "agent",
+  "rolePolicy": { "baseType": "manager", "profile": "manager.v1", "declaredRoleKeys": ["manager", "chief-of-staff"], "specializationKeys": ["executive-coordination"] },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.8.1",
+  "version": "2.10.0",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -26,6 +27,9 @@
     { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
   ],
   "requires": [
+    {"name": "platform.project-health.read.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
+    {"name": "platform.project-health.diagnostics.read.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
+    {"name": "platform.management.incident.report.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
     {"name":"work.project-intake.assistance-list.v1","scope":"organization","purpose":"Recover assigned project-manager assistance after hiring or reconnect."},
     {"name": "work.project-intake.staffing.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
     {"name": "communication.coordination.read.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
@@ -79,7 +83,9 @@
     ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision or explicitly replaced by the owner" }
     ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
     ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
-    ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" }
+    ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" },
+    {"name": "platform.management.incident.read.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."},
+    {"name": "platform.management.incident.forward.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."}
   ],
   "events": {
     "subscribes": ["com.csweet.calendar.reminder-due.v1", 
@@ -99,7 +105,10 @@
       "com.csweet.workstream.changed.v1",
       "com.csweet.workforce-plan.decided.v1",
       "com.csweet.workforce.changed.v1",
-      "com.csweet.hiring-recommendation.fulfilled.v1"
+      "com.csweet.hiring-recommendation.fulfilled.v1",
+      "com.csweet.project-health.review-due.v1",
+      "com.csweet.management.incident.changed.v1",
+      "com.csweet.agent.attention.review-due.v1"
     ]
   },
   "configuration": [
