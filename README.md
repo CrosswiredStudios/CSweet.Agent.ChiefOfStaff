@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet in `CSweet.Agent.ChiefOfStaff`.
 
-The agent uses `CSweet.Agent.SDK` 3.51.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.60.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -38,7 +38,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.51.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.60.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
@@ -105,3 +105,5 @@ role-specific recovery can be added through `AssessIncidentAsync` using existing
 A recorded recovery request does not close the incident or extend its 15-minute escalation deadline.
 
 Model token settings default to 256,000 context-window tokens (maxContextWindowTokens) and 128,000 maximum output tokens (maxOutputTokens). Explicit installation settings override these defaults.
+
+Management review reporting requires `platform.management.status-report.v1`. Version 2.10.4 declares this capability; approve the added grant when upgrading an existing installation. The host continues to authorize the report against the current management request.

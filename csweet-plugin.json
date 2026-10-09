@@ -4,7 +4,7 @@
   "rolePolicy": { "baseType": "manager", "profile": "manager.v1", "declaredRoleKeys": ["manager", "chief-of-staff"], "specializationKeys": ["executive-coordination"] },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.10.3",
+  "version": "2.10.4",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",
@@ -84,6 +84,7 @@
     ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
     ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
     ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" },
+    {"name": "platform.management.status-report.v1", "scope": "organization", "purpose": "Submit the Chief's status report for an authorized management review."},
     {"name": "platform.management.incident.read.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."},
     {"name": "platform.management.incident.forward.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."}
   ],

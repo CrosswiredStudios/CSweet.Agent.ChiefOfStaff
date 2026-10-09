@@ -1966,7 +1966,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         };
         var report = ChiefOfStaffOrchestrator.BuildManagementReport(checkIn, operatingContext);
         _ = await context.Platform.InvokeAsync<ManagementStatusReport, JsonElement>(
-            "platform.management.status-report.v1",
+            CapabilityNames.Management.StatusReport,
             report,
             cancellationToken);
     }

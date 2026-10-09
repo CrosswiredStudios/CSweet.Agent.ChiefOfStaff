@@ -164,6 +164,8 @@ public sealed class ChiefOfStaffProfileTests
         Assert.All(provides.Concat(requires), capability =>
             Assert.Contains(capability!, CapabilityCatalog.All));
         Assert.Contains(ManagementCapabilities.CheckIn, provides);
+        Assert.Contains("platform.management.status-report.v1", requires);
+        Assert.Contains("com.csweet.management.review.due.v1", subscriptions);
         Assert.Contains(AgentConfigurationCapabilities.Describe, provides);
         Assert.Contains(AgentConfigurationCapabilities.Update, provides);
         var configurationKeys = manifest.RootElement.GetProperty("configuration").EnumerateArray()
