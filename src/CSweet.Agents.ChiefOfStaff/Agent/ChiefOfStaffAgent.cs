@@ -29,8 +29,8 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
     private readonly IReadOnlyList<ICapabilityHandler> _capabilityHandlers;
     private readonly IReadOnlyList<IAgentEventHandler> _eventHandlers;
 
-    internal const int DefaultContextWindowTokens = 220_000;
-    internal const int DefaultOutputTokens = 32_000;
+    internal const int DefaultContextWindowTokens = 256_000;
+    internal const int DefaultOutputTokens = 128_000;
     private const int MinimumOutputTokens = 2_048;
 
     public ChiefOfStaffAgent(ILogger<ChiefOfStaffAgent> logger, IChiefOfStaffOrchestrator orchestrator)

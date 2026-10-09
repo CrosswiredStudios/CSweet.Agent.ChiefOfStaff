@@ -103,3 +103,5 @@ Diagnostic reads and assessment reports require the manifest's current approved 
 incident grants. Monitoring covers current assigned projects only. The default diagnosis escalates;
 role-specific recovery can be added through `AssessIncidentAsync` using existing authorized operations.
 A recorded recovery request does not close the incident or extend its 15-minute escalation deadline.
+
+Model token settings default to 256,000 context-window tokens (maxContextWindowTokens) and 128,000 maximum output tokens (maxOutputTokens). Explicit installation settings override these defaults.
