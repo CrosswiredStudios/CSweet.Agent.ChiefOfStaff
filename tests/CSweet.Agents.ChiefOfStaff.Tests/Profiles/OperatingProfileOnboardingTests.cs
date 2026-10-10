@@ -11,6 +11,31 @@ namespace CSweet.Agents.ChiefOfStaff.Tests.Profiles;
 
 public sealed class OperatingProfileOnboardingTests
 {
+    [Fact]
+    public async Task Hiring_AnsweredModeInsidePlatformPromptAdvancesToPublishers()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), false);
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy);
+        await harness.HireAsync();
+        var text = "<platform_interaction_context>Use hiring preferences.</platform_interaction_context>\n" +
+            "<memory_context>Let's change hiring preferences.</memory_context>\n" +
+            "<current_user_message>\nDecision: How should I help with hiring?\nAnswer: Recommend candidates\n</current_user_message>";
+        await harness.Agent.HandleEventAsync(Event(ChiefOfStaffProfile.UserMessageReceivedEvent, Guid.NewGuid(),
+            new UserMessageReceived(Guid.NewGuid(), harness.ConversationId.ToString(), Guid.NewGuid().ToString(), text, null, Guid.NewGuid())),
+            harness.Context, CancellationToken.None);
+        Assert.Equal(1, harness.CapturedHiringAnswers);
+        Assert.Single(harness.Decisions.Values, x => x.Prompt == "How should I help with hiring?");
+        Assert.Single(harness.Decisions.Values, x => x.Prompt == "Which publishers should I consider for hiring?");
+    }
+
+    [Fact]
+    public void Hiring_CurrentStructuredMessageTakesPriorityOverHistoryAndMemory()
+    {
+        var incoming = new UserMessageReceived(Guid.NewGuid(), "chat", "owner", "Change hiring preferences", null)
+            { CurrentMessageContent = "What are we working on?" };
+        Assert.Equal("What are we working on?", ChiefOfStaffAgent.ReadCurrentUserMessage(incoming));
+    }
+
     [Theory]
     [InlineData(true, "general", 0.95, false)]
     [InlineData(false, "game-studio", 0.95, true)]
@@ -213,6 +238,7 @@ public sealed class OperatingProfileOnboardingTests
         public ChiefOfStaffAgent Agent { get; set; }
         public FakeModel Model { get; }
         public int Completions { get; private set; }
+        public int CapturedHiringAnswers { get; private set; }
         public bool FailQuestions { get; set; }
         public Dictionary<string, AgentOperatingStateResponse> States { get; } = [];
         public Dictionary<string, string> Messages { get; } = [];
@@ -265,7 +291,15 @@ public sealed class OperatingProfileOnboardingTests
                     OrganizationId, "Example", "SaaS", "Software", "subscription accounting", null, "Validation",
                     [], [], null, [], null, [], [], null, "UTC", 1, 0.2m, new Dictionary<string, ProfileFieldProvenance>())));
             if (hiringPolicy is not null)
+            {
                 runtime.RegisterCapability<JsonElement, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, (_, _) => Task.FromResult(hiringPolicy));
+                runtime.RegisterCapability<CaptureHiringPolicyDecisionRequest, HiringPolicyResponse>(HiringAutonomyCapabilities.CaptureDecision, (request, _) =>
+                {
+                    CapturedHiringAnswers++;
+                    hiringPolicy = hiringPolicy with { Revision = hiringPolicy.Revision + 1, SetupStage = "publishers" };
+                    return Task.FromResult(hiringPolicy);
+                });
+            }
             Context = runtime.CreateContext(OrganizationId.ToString("D"), identity: new AgentIdentity(EmployeeId.ToString("D"), "Chief", null, null, null, [], null, null, null));
         }
         public ChiefOfStaffAgent NewAgent() => new(Model, NullLogger<ChiefOfStaffAgent>.Instance,

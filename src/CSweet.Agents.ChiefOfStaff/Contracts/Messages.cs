@@ -30,7 +30,10 @@ public sealed record UserMessageReceived(
     IReadOnlyDictionary<string, string>? Context,
     Guid TurnId = default,
     int Attempt = 0,
-    Guid MessageId = default);
+    Guid MessageId = default)
+{
+    public string? CurrentMessageContent { get; init; }
+}
 
 public sealed record AssistantCapabilityInput(
     Guid ProviderProfileId,

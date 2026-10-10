@@ -9,6 +9,24 @@ namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public sealed partial class ChiefOfStaffAgent
 {
+    internal static string ReadCurrentUserMessage(UserMessageReceived incoming)
+    {
+        if (incoming.CurrentMessageContent is { } current) return current.Trim();
+        // Compatibility with platforms that wrap the message but do not send its
+        // separate field. Only the final current-message block controls setup.
+        const string opening = "<current_user_message>";
+        const string closing = "</current_user_message>";
+        var text = incoming.Message.Trim();
+        var start = text.LastIndexOf(opening, StringComparison.Ordinal);
+        if (start >= 0 && text.EndsWith(closing, StringComparison.Ordinal))
+            return text[(start + opening.Length)..^closing.Length].Trim();
+        const string contextEnd = "</platform_interaction_context>";
+        if (text.StartsWith("<platform_interaction_context>", StringComparison.Ordinal) &&
+            text.IndexOf(contextEnd, StringComparison.Ordinal) is var end && end >= 0)
+            return text[(end + contextEnd.Length)..].Trim();
+        return text;
+    }
+
     private async Task<bool> BeginHiringPolicySetupAsync(Guid conversationId, AgentRuntimeContext context, CancellationToken token)
     {
         HiringPolicyResponse policy;

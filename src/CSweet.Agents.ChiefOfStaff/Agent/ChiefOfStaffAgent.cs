@@ -240,12 +240,13 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             incoming.TurnId,
             incoming.Attempt);
 
-        if (await TryStartHiringPolicyChangeAsync(Guid.Parse(conversationId), incoming.TurnId, incoming.Message, context, cancellationToken))
+        var currentMessage = ReadCurrentUserMessage(incoming);
+        if (await TryStartHiringPolicyChangeAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken))
         {
             await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
             return;
         }
-        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, incoming.Message, context, cancellationToken))
+        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken))
         {
             await turnStream.CommitAsync("I’ve updated the hiring setup. The next step is above.", cancellationToken);
             return;
