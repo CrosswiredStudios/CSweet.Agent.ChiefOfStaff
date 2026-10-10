@@ -692,7 +692,7 @@ What type of business are you building?
                         input.WorkstreamId,
                         input.Title,
                         input.Objective,
-                        "Suggested",
+                        "Pending",
                         input.RecommendedCandidateReference,
                         [],
                         DateTimeOffset.UtcNow,

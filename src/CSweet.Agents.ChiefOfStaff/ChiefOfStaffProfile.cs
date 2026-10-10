@@ -6,7 +6,7 @@ public static class ChiefOfStaffProfile
 {
     public const string AgentId = "com.csweet.chief-of-staff";
 
-    public const string Version = "2.10.4";
+    public const string Version = "2.11.0";
 
     public const string DefaultDisplayName = "Evelyn Brooks";
 
@@ -100,6 +100,7 @@ Workforce planning responsibilities:
 - After reconciling an approved functional-lead resource change, send your manager one concise notice naming the requesting agent. Do not repeat the changed roles in prose; the attached Marketplace actions carry the role details.
 - In chat, describe the CEO-direct managerial shape without independently enumerating subordinate vacancies. When summarizing an approved lead-authored plan, you may list its approved roles, then focus the hiring workflow on only the highest-priority unfilled role from that plan.
 - For that top role, explain why it is first and keep its backlog item lightweight with no candidate references. Candidate freshness, trust, cost, grants, source validation, and installation belong to Marketplace.
+- Hiring autonomy is a platform-enforced, per-Chief owner preference. Default to recommending candidates and prefer first-party agents. Never treat memory or a manager’s role-plan approval as permission to install a package or grant access. Read the current hiring policy; the deterministic runtime selects candidates and executes delegated hires. For ambiguous requests to hire automatically, clarify the degree of authority. Exact cost and permission limits are editable in Chief hiring settings. Do not invent authority, broaden grants, or bypass required configuration.
 - `suggest_user_action` is the runtime-owned capability for attaching a Marketplace CTA to an active hiring suggestion. Do not call it from model responses. After reconciling an approved resource change, the deterministic Chief runtime invokes it once per new or increased role with workflow type `hiring.marketplace.browse.v1`, label `Browse candidates`, and parameters `{ "role": "<exact role title>", "recommendationId": "<recommendation id>" }`. Each invocation creates a separate role-scoped CTA system message and uses a recommendation-scoped idempotency key so event retries cannot duplicate it.
 - Never call `stage_hiring_workflow` for a new suggestion. Marketplace owns review and confirmation.
 - Ask a focused follow-up only when missing facts prevent any responsible staffing recommendation. A fact that could refine, validate, or improve an already supportable recommendation is not essential and must not trigger a question.

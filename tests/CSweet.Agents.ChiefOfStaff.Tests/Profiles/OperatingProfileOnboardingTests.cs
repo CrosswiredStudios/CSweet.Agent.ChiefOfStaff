@@ -170,6 +170,34 @@ public sealed class OperatingProfileOnboardingTests
         Assert.Equal(["Beta", "Discuss alternatives"], confirmation.Select(x => x.Label));
     }
 
+    [Theory]
+    [InlineData("mode", "recommend")]
+    [InlineData("level", "approved")]
+    [InlineData("costs", "free")]
+    [InlineData("permissions", "none")]
+    [InlineData("publishers", "prefer")]
+    public async Task Hiring_AsksOnePolicyQuestionBeforeFocusAndRetriesWithoutDuplicates(string stage, string recommended)
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), false, SetupStage: stage);
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy);
+        await harness.HireAsync(); await harness.HireAsync();
+        var decision = Assert.Single(harness.Decisions.Values);
+        Assert.Equal(recommended, decision.RecommendedOptionId);
+        Assert.StartsWith($"hiring-policy:{policy.InstallationId:N}:{stage}:", decision.IdempotencyKey);
+        Assert.Single(harness.Messages);
+        Assert.Empty(harness.Todos);
+        Assert.DoesNotContain("focus", decision.Prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Hiring_WithSavedPreferencesContinuesToCompanyFocus()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 1, new(), true, SetupStage: "complete");
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy);
+        await harness.HireAsync();
+        Assert.Contains("focus", Assert.Single(harness.Decisions.Values).Prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string Assessment(bool appropriate, string key, double confidence) => JsonSerializer.Serialize(new
         { currentProfileAppropriate = appropriate, recommendedProfileKey = key, confidence, reason = "The company develops its own games." });
     private static AgentEventEnvelope Event(string name, Guid id, object payload) => new(Guid.NewGuid(), id, name,
@@ -191,7 +219,7 @@ public sealed class OperatingProfileOnboardingTests
         public Dictionary<string, RequestUserInputRequest> Decisions { get; } = [];
         public Dictionary<string, JsonElement> Todos { get; } = [];
         private Dictionary<string, Guid> MessageIds { get; } = [];
-        public Harness(string response, bool missingBusiness = false)
+        public Harness(string response, bool missingBusiness = false, HiringPolicyResponse? hiringPolicy = null)
         {
             Model = new FakeModel(response);
             Agent = NewAgent();
@@ -236,6 +264,8 @@ public sealed class OperatingProfileOnboardingTests
                 runtime.RegisterCapability<JsonElement, BusinessProfileResponse>(PlatformCapabilities.BusinessProfileRead, (_, _) => Task.FromResult(new BusinessProfileResponse(
                     OrganizationId, "Example", "SaaS", "Software", "subscription accounting", null, "Validation",
                     [], [], null, [], null, [], [], null, "UTC", 1, 0.2m, new Dictionary<string, ProfileFieldProvenance>())));
+            if (hiringPolicy is not null)
+                runtime.RegisterCapability<JsonElement, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, (_, _) => Task.FromResult(hiringPolicy));
             Context = runtime.CreateContext(OrganizationId.ToString("D"), identity: new AgentIdentity(EmployeeId.ToString("D"), "Chief", null, null, null, [], null, null, null));
         }
         public ChiefOfStaffAgent NewAgent() => new(Model, NullLogger<ChiefOfStaffAgent>.Instance,

@@ -82,6 +82,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         CancellationToken cancellationToken)
     {
         await ResumeProjectAssistanceAsync(context, cancellationToken);
+        await RecoverApprovedHiringAsync(context, cancellationToken);
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
         _logger.LogInformation(
             "Chief of Staff reconciled its personal hiring queue during {ActivationReason} activation {TickId}.",
@@ -239,6 +240,16 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             incoming.TurnId,
             incoming.Attempt);
 
+        if (await TryStartHiringPolicyChangeAsync(Guid.Parse(conversationId), incoming.TurnId, incoming.Message, context, cancellationToken))
+        {
+            await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
+            return;
+        }
+        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, incoming.Message, context, cancellationToken))
+        {
+            await turnStream.CommitAsync("I’ve updated the hiring setup. The next step is above.", cancellationToken);
+            return;
+        }
         await turnStream.ActivityStartedAsync(
             "Chief of Staff accepted the request.",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -411,6 +422,8 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             response.Length);
 
         await turnStream.CommitAsync(response, cancellationToken);
+        if (response.Contains("hiring", StringComparison.OrdinalIgnoreCase))
+            _ = await BeginHiringPolicySetupAsync(Guid.Parse(conversationId), context, cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed streaming for conversation {ConversationId}. Chunks {ChunkCount}. ResponseLength {ResponseLength}.",
@@ -625,6 +638,11 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
             return;
         }
+        if (await BeginHiringPolicySetupAsync(onboarding.ConversationId, context, cancellationToken))
+        {
+            _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
+            return;
+        }
         await BeginFocusOnboardingAsync(onboarding.ConversationId, $"agent-onboarded:{eventId:N}", operatingContext, profile, context, cancellationToken);
         _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
 
@@ -770,7 +788,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             ? ResourceChangeDecisionKinds.Approve
             : ResourceChangeDecisionKinds.RequestRevision;
         var comment = missingPurpose is null
-            ? "Approved as an organizational role-set decision. Spending, candidate selection, and each hire remain separately controlled."
+            ? "Approved as an organizational role-set decision. Hiring follows the owner’s saved delegation and the platform’s spending and permission controls."
             : $"Clarify the purpose and required capabilities for {missingPurpose.Title}.";
         _ = await context.Platform.DecideResourceChangeAsync(
             new ResourceChangeDecisionRequest(
@@ -863,7 +881,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 },
                 cancellationToken);
 
-            actionableRecommendations.Add((delta, recommendation));
+            if (recommendation.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase) && recommendation.FulfilledHeadcount < recommendation.Headcount)
+                actionableRecommendations.Add((delta, recommendation));
         }
 
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
@@ -1359,6 +1378,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         if (!mentioned && !becameTopThisTurn)
             return;
 
+        if (!await PrepareHiringCandidateAsync(next.Id, context, cancellationToken)) return;
         _ = await context.Platform.SuggestUserActionAsync(
             new SuggestUserActionRequest(
                 null,
@@ -1379,6 +1399,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        if (!await PrepareHiringCandidateAsync(recommendationId, context, cancellationToken)) return;
         _ = await context.Platform.SuggestUserActionAsync(
             new SuggestUserActionRequest(
                 messageId,
