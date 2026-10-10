@@ -107,3 +107,5 @@ A recorded recovery request does not close the incident or extend its 15-minute 
 Model token settings default to 256,000 context-window tokens (maxContextWindowTokens) and 128,000 maximum output tokens (maxOutputTokens). Explicit installation settings override these defaults.
 
 Management review reporting requires `platform.management.status-report.v1`. Version 2.11.0 declares this capability; approve the added grant when upgrading an existing installation. The host continues to authorize the report against the current management request.
+
+Chief 2.11.1 requires the published `CSweet.Agent.SDK` 3.62.1 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
