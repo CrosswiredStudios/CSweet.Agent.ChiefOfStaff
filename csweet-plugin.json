@@ -4,7 +4,7 @@
   "rolePolicy": { "baseType": "manager", "profile": "manager.v1", "declaredRoleKeys": ["manager", "chief-of-staff"], "specializationKeys": ["executive-coordination"] },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.11.2",
+  "version": "2.11.4",
   "publisher": { "id": "com.csweet", "name": "C-Sweet" },
   "runtime": {
     "type": "dotnet-project",

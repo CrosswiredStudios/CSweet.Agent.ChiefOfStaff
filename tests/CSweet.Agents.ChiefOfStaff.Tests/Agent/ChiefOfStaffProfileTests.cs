@@ -254,6 +254,41 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
+    public async Task FinalResponse_WaitsForCandidateAndDurableCardBeforeCommit()
+    {
+        var recommendation = NewRecommendation("Creative Director");
+        var (runtime, suggested) = CreateAttachmentRuntime(recommendation);
+        var selecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runtime.RegisterCapability<SelectHiringCandidateRequest, HiringCandidateSelectionResponse>(
+            HiringAutonomyCapabilities.SelectCandidate, async (request, token) =>
+            {
+                selecting.SetResult();
+                await release.Task.WaitAsync(token);
+                return new(request.RecommendationId, HiringSelectionMode.RecommendCandidates, null, "Role fit");
+            });
+        runtime.RegisterCapability<SuggestUserActionRequest, SuggestedUserActionResponse>(
+            PlatformCapabilities.UserActionSuggest, (request, _) =>
+            {
+                Assert.DoesNotContain(runtime.Progress, x => x.GetProperty("isFinal").GetBoolean());
+                suggested.Add(request);
+                return Task.FromResult(new SuggestedUserActionResponse(Guid.NewGuid(), request.WorkflowType,
+                    request.Label, request.Description, "/marketplace", "Pending", DateTimeOffset.UtcNow));
+            });
+        var context = runtime.CreateContext();
+        var turnId = Guid.NewGuid();
+        await using var stream = context.CreateTurnStream(Guid.NewGuid().ToString(), turnId);
+        var publishing = CreateAgent().CommitResponseWithHiringActionAsync(turnId,
+            "I recommend a Creative Director.", "test", context, new HashSet<Guid>(), stream, CancellationToken.None);
+        await selecting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Empty(runtime.Progress);
+        release.SetResult();
+        await publishing;
+        Assert.Single(suggested);
+        Assert.True(Assert.Single(runtime.Progress).GetProperty("isFinal").GetBoolean());
+    }
+
+    [Fact]
     public async Task UnchangedBacklog_WithoutTitleMention_DoesNotAttachASuggestion()
     {
         var recommendation = NewRecommendation("Creative Director");

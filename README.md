@@ -111,3 +111,7 @@ Management review reporting requires `platform.management.status-report.v1`. Ver
 Chief 2.11.1 requires the published `CSweet.Agent.SDK` 3.62.1 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
 
 Chief 2.11.2 routes hiring setup using the current owner message separately from the model's conversation and memory prompt. Answering the mode question advances setup instead of restarting it when previous messages mention hiring preferences.
+
+Chief 2.11.4 completes hiring-preference answers with the saved next-question card instead of posting a second acknowledgement. The platform must support `terminal-question-message` turn completion before upgrading to this release.
+
+Hiring candidate selection and its durable chat action finish before the final response is committed. Communications presents the selected agent with Hire and Browse Candidates actions.

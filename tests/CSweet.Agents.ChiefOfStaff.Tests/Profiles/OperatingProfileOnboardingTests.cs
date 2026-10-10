@@ -26,6 +26,10 @@ public sealed class OperatingProfileOnboardingTests
         Assert.Equal(1, harness.CapturedHiringAnswers);
         Assert.Single(harness.Decisions.Values, x => x.Prompt == "How should I help with hiring?");
         Assert.Single(harness.Decisions.Values, x => x.Prompt == "Which publishers should I consider for hiring?");
+        var terminal = Assert.Single(harness.Runtime.Progress);
+        Assert.Equal("terminal-question-message", terminal.GetProperty("kind").GetString());
+        Assert.Equal(string.Empty, terminal.GetProperty("delta").GetString());
+        Assert.True(terminal.GetProperty("isFinal").GetBoolean());
     }
 
     [Fact]
@@ -235,6 +239,7 @@ public sealed class OperatingProfileOnboardingTests
         private Guid EmployeeId { get; } = Guid.NewGuid();
         private Guid EventId { get; } = Guid.NewGuid();
         public AgentRuntimeContext Context { get; }
+        public AgentTestRuntime Runtime { get; }
         public ChiefOfStaffAgent Agent { get; set; }
         public FakeModel Model { get; }
         public int Completions { get; private set; }
@@ -300,6 +305,7 @@ public sealed class OperatingProfileOnboardingTests
                     return Task.FromResult(hiringPolicy);
                 });
             }
+            Runtime = runtime;
             Context = runtime.CreateContext(OrganizationId.ToString("D"), identity: new AgentIdentity(EmployeeId.ToString("D"), "Chief", null, null, null, [], null, null, null));
         }
         public ChiefOfStaffAgent NewAgent() => new(Model, NullLogger<ChiefOfStaffAgent>.Instance,

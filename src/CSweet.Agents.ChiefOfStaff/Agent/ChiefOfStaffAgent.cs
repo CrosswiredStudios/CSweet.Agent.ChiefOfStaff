@@ -246,9 +246,12 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
             return;
         }
-        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken))
+        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken) is { } questionMessageId)
         {
-            await turnStream.CommitAsync("I’ve updated the hiring setup. The next step is above.", cancellationToken);
+            await context.ReportProgressAsync(new AssistantResponseChunk(conversationId, 0, string.Empty, true,
+                TurnId: incoming.TurnId, Kind: "terminal-question-message",
+                Metadata: new Dictionary<string, string> { ["messageId"] = questionMessageId.ToString("D") },
+                Attempt: incoming.Attempt), cancellationToken);
             return;
         }
         await turnStream.ActivityStartedAsync(
@@ -422,7 +425,9 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             sequence,
             response.Length);
 
-        await turnStream.CommitAsync(response, cancellationToken);
+        await CommitResponseWithHiringActionAsync(
+            incoming.TurnId, response, $"user-message:{message.EventId}", context,
+            knownRecommendationIds, turnStream, cancellationToken);
         if (response.Contains("hiring", StringComparison.OrdinalIgnoreCase))
             _ = await BeginHiringPolicySetupAsync(Guid.Parse(conversationId), context, cancellationToken);
 
@@ -432,23 +437,6 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             sequence,
             response.Length);
 
-        try
-        {
-            await AttachMentionedHiringActionAsync(
-                incoming.TurnId,
-                response,
-                $"user-message:{message.EventId}",
-                context,
-                knownRecommendationIds,
-                cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(
-                exception,
-                "Chief of Staff could not attach a suggested hiring action to chat turn {TurnId}.",
-                incoming.TurnId);
-        }
 
         try
         {
@@ -650,7 +638,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         _logger.LogInformation("Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.", eventId, onboarding.ConversationId);
     }
 
-    private async Task BeginFocusOnboardingAsync(Guid conversationId, string idempotencyKey,
+    private async Task<Guid> BeginFocusOnboardingAsync(Guid conversationId, string idempotencyKey,
         ChiefOperatingContext operatingContext, BusinessOperatingProfile profile,
         AgentRuntimeContext context, CancellationToken cancellationToken)
     {
@@ -669,6 +657,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             $"{idempotencyKey}:focus",
             context,
             cancellationToken);
+        return openingMessageId;
     }
 
     internal static string BuildFocusOnboardingMessage(
@@ -1353,6 +1342,30 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 "Chief of Staff could not attach the optional hiring action to onboarding message {MessageId}.",
                 messageId);
         }
+    }
+
+    internal async Task CommitResponseWithHiringActionAsync(
+        Guid chatTurnId,
+        string response,
+        string idempotencyPrefix,
+        AgentRuntimeContext context,
+        IReadOnlySet<Guid>? knownRecommendationIds,
+        AgentTurnStreamWriter turnStream,
+        CancellationToken cancellationToken)
+    {
+        // A final commit ends the platform turn and may stop this work attempt immediately.
+        // Persist candidate selection and its action first so completion can materialize the card.
+        try
+        {
+            await AttachMentionedHiringActionAsync(chatTurnId, response, idempotencyPrefix,
+                context, knownRecommendationIds, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception,
+                "Chief of Staff could not attach a suggested hiring action to chat turn {TurnId}.", chatTurnId);
+        }
+        await turnStream.CommitAsync(response, cancellationToken);
     }
 
     internal async Task AttachMentionedHiringActionAsync(

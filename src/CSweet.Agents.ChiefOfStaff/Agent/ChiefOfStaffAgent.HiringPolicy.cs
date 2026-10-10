@@ -53,11 +53,11 @@ public sealed partial class ChiefOfStaffAgent
         catch (PlatformCapabilityException) { return false; }
     }
 
-    private async Task<bool> HandleHiringPolicyAnswerAsync(Guid conversationId, Guid turnId, string text,
+    private async Task<Guid?> HandleHiringPolicyAnswerAsync(Guid conversationId, Guid turnId, string text,
         AgentRuntimeContext context, CancellationToken token)
     {
         if (!text.StartsWith("Decision: ", StringComparison.Ordinal) ||
-            !(text.Contains("hiring", StringComparison.OrdinalIgnoreCase) || text.Contains("publisher", StringComparison.OrdinalIgnoreCase))) return false;
+            !(text.Contains("hiring", StringComparison.OrdinalIgnoreCase) || text.Contains("publisher", StringComparison.OrdinalIgnoreCase))) return null;
         HiringPolicyResponse policy;
         try
         {
@@ -68,21 +68,19 @@ public sealed partial class ChiefOfStaffAgent
         catch (PlatformCapabilityException exception) when (exception.Code == PlatformCapabilityErrorCode.ValidationFailed)
         {
             var unchanged = await context.Platform.InvokeAsync<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, new { }, token);
-            await AskHiringPolicyQuestionAsync(conversationId, unchanged, context, token, turnId.ToString("N"));
-            return true;
+            return await AskHiringPolicyQuestionAsync(conversationId, unchanged, context, token, turnId.ToString("N"));
         }
-        catch (PlatformCapabilityException) { return false; }
-        if (!policy.SetupComplete) await AskHiringPolicyQuestionAsync(conversationId, policy, context, token);
+        catch (PlatformCapabilityException) { return null; }
+        if (!policy.SetupComplete) return await AskHiringPolicyQuestionAsync(conversationId, policy, context, token);
         else
         {
             var operating = await _orchestrator.AssembleContextAsync(context, token);
-            await BeginFocusOnboardingAsync(conversationId, $"hiring-policy-complete:{policy.InstallationId:N}:{policy.Revision}",
+            return await BeginFocusOnboardingAsync(conversationId, $"hiring-policy-complete:{policy.InstallationId:N}:{policy.Revision}",
                 operating, BusinessOperatingProfiles.Resolve(Settings), context, token);
         }
-        return true;
     }
 
-    private static async Task AskHiringPolicyQuestionAsync(Guid conversationId, HiringPolicyResponse policy,
+    private static async Task<Guid> AskHiringPolicyQuestionAsync(Guid conversationId, HiringPolicyResponse policy,
         AgentRuntimeContext context, CancellationToken token, string? retry = null)
     {
         var (prompt, options, recommended) = policy.SetupStage switch
@@ -127,6 +125,7 @@ public sealed partial class ChiefOfStaffAgent
         _ = await context.Platform.InvokeAsync<RequestUserInputRequest, RequestUserInputResponse>(
             ChiefOfStaffProfile.RequestUserInputCapability,
             new(conversationId, null, id, prompt, options, recommended, key), token);
+        return id;
     }
 
     private async Task RecoverApprovedHiringAsync(AgentRuntimeContext context, CancellationToken token)
