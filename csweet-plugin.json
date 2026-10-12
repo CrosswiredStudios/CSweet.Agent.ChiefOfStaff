@@ -1,11 +1,24 @@
 {
   "manifestVersion": "2.0",
   "kind": "agent",
-  "rolePolicy": { "baseType": "manager", "profile": "manager.v1", "declaredRoleKeys": ["manager", "chief-of-staff"], "specializationKeys": ["executive-coordination"] },
+  "rolePolicy": {
+    "baseType": "manager",
+    "profile": "manager.v1",
+    "declaredRoleKeys": [
+      "manager",
+      "chief-of-staff"
+    ],
+    "specializationKeys": [
+      "executive-coordination"
+    ]
+  },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.11.4",
-  "publisher": { "id": "com.csweet", "name": "C-Sweet" },
+  "version": "2.12.0",
+  "publisher": {
+    "id": "com.csweet",
+    "name": "C-Sweet"
+  },
   "runtime": {
     "type": "dotnet-project",
     "projectPath": "src/CSweet.Agents.ChiefOfStaff/CSweet.Agents.ChiefOfStaff.csproj",
@@ -14,86 +27,524 @@
     "supportsMultipleInstallations": true,
     "maximumConcurrentJobs": 20
   },
-  "protocol": { "minimumVersion": "2.0", "maximumVersion": "2.x" },
+  "protocol": {
+    "minimumVersion": "2.0",
+    "maximumVersion": "2.x"
+  },
   "provides": [
-    { "name": "assistant.converse.v1", "description": "Converse with the Chief of Staff.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "assistant.summarize-activity.v1", "description": "Summarize operating activity.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "assistant.plan-work.v1", "description": "Plan executive work.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.check-in.v1", "description": "Run an executive check-in.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.product-role-brief.v1", "description": "Produce an authoritative role brief for a CEO-peer Product Manager.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
-    { "name": "management.product-plan.review.v1", "description": "Review a CEO-peer Product Manager plan for company-level reconciliation.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 120, "idempotency": "work-item" },
-    { "name": "management.product-escalation.v1", "description": "Relay a CEO-peer Product Manager decision to the CEO.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 60, "idempotency": "work-item" },
-    { "name": "agent.configuration.describe.v1", "description": "Describe Chief of Staff configuration.", "inputSchema": { "type": "object", "additionalProperties": false }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "none" },
-    { "name": "agent.configuration.update.v1", "description": "Validate a Chief of Staff configuration update.", "inputSchema": { "type": "object", "additionalProperties": true }, "outputSchema": { "type": "object", "additionalProperties": true }, "executionTimeoutSeconds": 30, "idempotency": "work-item" }
+    {
+      "name": "assistant.converse.v1",
+      "description": "Converse with the Chief of Staff.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 120,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "assistant.summarize-activity.v1",
+      "description": "Summarize operating activity.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 120,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "assistant.plan-work.v1",
+      "description": "Plan executive work.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 120,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "management.check-in.v1",
+      "description": "Run an executive check-in.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 120,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "management.product-role-brief.v1",
+      "description": "Produce an authoritative role brief for a CEO-peer Product Manager.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 60,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "management.product-plan.review.v1",
+      "description": "Review a CEO-peer Product Manager plan for company-level reconciliation.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 120,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "management.product-escalation.v1",
+      "description": "Relay a CEO-peer Product Manager decision to the CEO.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 60,
+      "idempotency": "work-item"
+    },
+    {
+      "name": "agent.configuration.describe.v1",
+      "description": "Describe Chief of Staff configuration.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 30,
+      "idempotency": "none"
+    },
+    {
+      "name": "agent.configuration.update.v1",
+      "description": "Validate a Chief of Staff configuration update.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "executionTimeoutSeconds": 30,
+      "idempotency": "work-item"
+    }
   ],
   "requires": [
-    {"name": "platform.project-health.read.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
-    {"name": "platform.project-health.diagnostics.read.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
-    {"name": "platform.management.incident.report.v1", "scope": "organization", "purpose": "Inspect and assess incidents within current project and reporting authority."},
-    {"name":"work.project-intake.assistance-list.v1","scope":"organization","purpose":"Recover assigned project-manager assistance after hiring or reconnect."},
-    {"name": "work.project-intake.staffing.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
-    {"name": "communication.coordination.read.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
-    {"name": "communication.coordination.respond.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
-    {"name": "communication.coordination.start.v1", "scope": "organization", "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."},
-
-    {"name": "work.calendar.read.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
-    {"name": "work.calendar.create.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
-    {"name": "work.calendar.update.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
-    {"name": "work.calendar.cancel.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
-    {"name": "work.calendar.schedule.v1", "scope": "organization", "purpose": "Operate the business calendar within event ownership and reporting authority."},
-    { "name": "platform.hiring-policy.read.v1", "scope": "organization", "purpose": "Respect owner-controlled hiring delegation for approved plans" },
-    { "name": "platform.hiring-policy.capture-decision.v1", "scope": "organization", "purpose": "Respect owner-controlled hiring delegation for approved plans" },
-    { "name": "platform.hiring-candidate.select.v1", "scope": "organization", "purpose": "Respect owner-controlled hiring delegation for approved plans" },
-    { "name": "platform.hiring-delegation.submit.v1", "scope": "organization", "purpose": "Respect owner-controlled hiring delegation for approved plans" },
-    { "name": "platform.agent-operating-state.read.v1", "scope": "organization", "purpose": "Resume the initial operating-profile assessment across retries" },
-    { "name": "platform.agent-operating-state.write.v1", "scope": "organization", "purpose": "Persist the initial operating-profile assessment before asking the owner" },
-    { "name": "work.personal-todo.read.v1", "scope": "organization", "purpose": "Read resource-scoped personal queues" },
-    { "name": "work.personal-todo.add.v1", "scope": "organization", "purpose": "Runtime-managed projection of hiring recommendations onto this Chief's personal board" },
-    { "name": "work.personal-todo.reorder.v1", "scope": "organization", "purpose": "Reorder directly managed personal work" },
-    { "name": "work.personal-todo.requeue.v1", "scope": "organization", "purpose": "Requeue blocked personal work" },
-    { "name": "work.personal-todo.activate.v1", "scope": "organization", "purpose": "Activate the next sequenced hiring task from this Chief's own backlog" },
-    { "name": "work.personal-todo.claim.v1", "scope": "organization", "purpose": "SDK-managed atomic personal work claims" },
-    { "name": "work.personal-todo.complete.v1", "scope": "organization", "purpose": "SDK-managed personal work completion" },
-    { "name": "work.personal-todo.block.v1", "scope": "organization", "purpose": "SDK-managed durable personal work blocking" },
-    { "name": "work.personal-todo.release.v1", "scope": "organization", "purpose": "SDK-managed personal work release" },
-    { "name": "platform.user-input.request.v1", "scope": "organization", "purpose": "Ask the owner a bounded structured question" },
-    { "name": "platform.llm.chat-stream.v1", "scope": "organization", "purpose": "Generate Chief of Staff responses" },
-    { "name": "platform.business-profile.read.v1", "scope": "organization", "purpose": "Ground advice in the authoritative business profile" },
-    { "name": "platform.business-profile.update-explicit.v1", "scope": "organization", "purpose": "Save low-risk facts explicitly supplied by the owner" },
-    { "name": "platform.business-profile.propose-update.v1", "scope": "organization", "purpose": "Propose sensitive or inferred business profile changes" },
-    { "name": "platform.organization.snapshot.read.v1", "scope": "organization", "purpose": "Inspect reporting lines, workstreams, roles, and available workers" },
-    { "name": "platform.business-pattern.search.v1", "scope": "organization", "purpose": "Find stage-appropriate operating patterns" },
-    { "name": "platform.workstream.plan.propose.v1", "scope": "organization", "purpose": "Propose managed outcome workstreams" },
-    { "name": "platform.workforce.search.v1", "scope": "organization", "purpose": "Find capable current, installed, marketplace, or human resources" },
-    { "name": "platform.agent-catalog.search.v1", "scope": "organization", "purpose": "Search installed, local-directory, first-party, and marketplace agents through the platform catalog" },
-    { "name": "platform.workforce-plan.propose.v1", "scope": "organization", "purpose": "Propose an explainable team plan for approval" },
-    { "name": "platform.finance-profile.read.v1", "scope": "organization", "purpose": "Ground staffing advice in financial goals and controls" },
-    { "name": "platform.finance-profile.propose-update.v1", "scope": "organization", "purpose": "Propose changes to financial goals or controls" },
-    { "name": "platform.budget.evaluate.v1", "scope": "organization", "purpose": "Check hard budget constraints before paid work" },
-    { "name": "platform.approval.propose.v1", "scope": "organization", "purpose": "Create separately gated action proposals" },
-    { "name": "platform.management-cycle.read.v1", "scope": "organization", "purpose": "Follow the configured management cadence" },
-    { "name": "memory.business.read.v1", "scope": "organization", "purpose": "Recall approved business context" },
-    { "name": "memory.business.propose.v1", "scope": "organization", "purpose": "Propose business memories" },
-    { "name": "memory.user.read.v1", "scope": "user", "purpose": "Recall approved user context" },
-    { "name": "memory.user.propose.v1", "scope": "user", "purpose": "Propose user memories" },
-    { "name": "communication.chat.read.v1", "scope": "organization", "purpose": "Find the Chief's protected CEO conversation for delegated executive questions" },
-    { "name": "agent.onboarding.complete.v1", "scope": "organization", "purpose": "Acknowledge completion of this installation's durable onboarding event" },
-    { "name": "communication.chat.create.v1", "scope": "organization", "purpose": "Open or reuse a direct conversation with the Chief's current manager" },
-    { "name": "communication.message.send.v1", "scope": "organization", "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to" },
-    { "name": "product-management.plan.v1", "scope": "organization", "purpose": "Consult an active Product Manager sharing the Chief's CEO manager" },
-    { "name": "product-management.context.update.v1", "scope": "organization", "purpose": "Push authoritative role and decision updates to Product Managers sharing the Chief's CEO manager" }
-    ,{ "name": "platform.hiring-recommendation.list.v1", "scope": "organization", "purpose": "Read this Chief of Staff installation's ranked role backlog" }
-    ,{ "name": "platform.hiring-recommendation.upsert.v1", "scope": "organization", "purpose": "Maintain the ranked HR hiring backlog" }
-    ,{ "name": "platform.hiring-recommendation.withdraw.v1", "scope": "organization", "purpose": "Withdraw suggestions removed by an approved resource-change revision or explicitly replaced by the owner" }
-    ,{ "name": "platform.management.resource-change.read.v1", "scope": "organization", "purpose": "Read authoritative pending and approved resource-change requests" }
-    ,{ "name": "platform.management.resource-change.decide.v1", "scope": "organization", "purpose": "Decide requests only when this Chief is the requester's current manager" }
-    ,{ "name": "platform.user-action.suggest.v1", "scope": "organization", "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages" },
-    {"name": "platform.management.status-report.v1", "scope": "organization", "purpose": "Submit the Chief's status report for an authorized management review."},
-    {"name": "platform.management.incident.read.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."},
-    {"name": "platform.management.incident.forward.v1", "scope": "organization", "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."}
+    {
+      "name": "platform.project-health.read.v1",
+      "scope": "organization",
+      "purpose": "Inspect and assess incidents within current project and reporting authority."
+    },
+    {
+      "name": "platform.project-health.diagnostics.read.v1",
+      "scope": "organization",
+      "purpose": "Inspect and assess incidents within current project and reporting authority."
+    },
+    {
+      "name": "platform.management.incident.report.v1",
+      "scope": "organization",
+      "purpose": "Inspect and assess incidents within current project and reporting authority."
+    },
+    {
+      "name": "work.project-intake.assistance-list.v1",
+      "scope": "organization",
+      "purpose": "Recover assigned project-manager assistance after hiring or reconnect."
+    },
+    {
+      "name": "work.project-intake.staffing.v1",
+      "scope": "organization",
+      "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."
+    },
+    {
+      "name": "communication.coordination.read.v1",
+      "scope": "organization",
+      "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."
+    },
+    {
+      "name": "communication.coordination.respond.v1",
+      "scope": "organization",
+      "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."
+    },
+    {
+      "name": "communication.coordination.start.v1",
+      "scope": "organization",
+      "purpose": "Retain requests and coordinate authorized project setup without granting creation or assignment authority."
+    },
+    {
+      "name": "work.calendar.read.v1",
+      "scope": "organization",
+      "purpose": "Operate the business calendar within event ownership and reporting authority."
+    },
+    {
+      "name": "work.calendar.create.v1",
+      "scope": "organization",
+      "purpose": "Operate the business calendar within event ownership and reporting authority."
+    },
+    {
+      "name": "work.calendar.update.v1",
+      "scope": "organization",
+      "purpose": "Operate the business calendar within event ownership and reporting authority."
+    },
+    {
+      "name": "work.calendar.cancel.v1",
+      "scope": "organization",
+      "purpose": "Operate the business calendar within event ownership and reporting authority."
+    },
+    {
+      "name": "work.calendar.schedule.v1",
+      "scope": "organization",
+      "purpose": "Operate the business calendar within event ownership and reporting authority."
+    },
+    {
+      "name": "platform.hiring-policy.read.v1",
+      "scope": "organization",
+      "purpose": "Respect owner-controlled hiring delegation for approved plans"
+    },
+    {
+      "name": "platform.hiring-policy.capture-decision.v1",
+      "scope": "organization",
+      "purpose": "Respect owner-controlled hiring delegation for approved plans"
+    },
+    {
+      "name": "platform.hiring-candidate.select.v1",
+      "scope": "organization",
+      "purpose": "Respect owner-controlled hiring delegation for approved plans"
+    },
+    {
+      "name": "platform.hiring-delegation.submit.v1",
+      "scope": "organization",
+      "purpose": "Respect owner-controlled hiring delegation for approved plans"
+    },
+    {
+      "name": "platform.agent-operating-state.read.v1",
+      "scope": "organization",
+      "purpose": "Resume the initial operating-profile assessment across retries"
+    },
+    {
+      "name": "platform.agent-operating-state.write.v1",
+      "scope": "organization",
+      "purpose": "Persist the initial operating-profile assessment before asking the owner"
+    },
+    {
+      "name": "work.personal-todo.read.v1",
+      "scope": "organization",
+      "purpose": "Read resource-scoped personal queues"
+    },
+    {
+      "name": "work.personal-todo.add.v1",
+      "scope": "organization",
+      "purpose": "Runtime-managed projection of hiring recommendations onto this Chief's personal board"
+    },
+    {
+      "name": "work.personal-todo.reorder.v1",
+      "scope": "organization",
+      "purpose": "Reorder directly managed personal work"
+    },
+    {
+      "name": "work.personal-todo.requeue.v1",
+      "scope": "organization",
+      "purpose": "Requeue blocked personal work"
+    },
+    {
+      "name": "work.personal-todo.activate.v1",
+      "scope": "organization",
+      "purpose": "Activate the next sequenced hiring task from this Chief's own backlog"
+    },
+    {
+      "name": "work.personal-todo.claim.v1",
+      "scope": "organization",
+      "purpose": "SDK-managed atomic personal work claims"
+    },
+    {
+      "name": "work.personal-todo.complete.v1",
+      "scope": "organization",
+      "purpose": "SDK-managed personal work completion"
+    },
+    {
+      "name": "work.personal-todo.block.v1",
+      "scope": "organization",
+      "purpose": "SDK-managed durable personal work blocking"
+    },
+    {
+      "name": "work.personal-todo.release.v1",
+      "scope": "organization",
+      "purpose": "SDK-managed personal work release"
+    },
+    {
+      "name": "platform.user-input.request.v1",
+      "scope": "organization",
+      "purpose": "Ask the owner a bounded structured question"
+    },
+    {
+      "name": "platform.llm.chat-stream.v1",
+      "scope": "organization",
+      "purpose": "Generate Chief of Staff responses"
+    },
+    {
+      "name": "platform.business-profile.read.v1",
+      "scope": "organization",
+      "purpose": "Ground advice in the authoritative business profile"
+    },
+    {
+      "name": "platform.business-profile.update-explicit.v1",
+      "scope": "organization",
+      "purpose": "Save low-risk facts explicitly supplied by the owner"
+    },
+    {
+      "name": "platform.business-profile.propose-update.v1",
+      "scope": "organization",
+      "purpose": "Propose sensitive or inferred business profile changes"
+    },
+    {
+      "name": "platform.organization.snapshot.read.v1",
+      "scope": "organization",
+      "purpose": "Inspect reporting lines, workstreams, roles, and available workers"
+    },
+    {
+      "name": "platform.business-pattern.search.v1",
+      "scope": "organization",
+      "purpose": "Find stage-appropriate operating patterns"
+    },
+    {
+      "name": "platform.workstream.plan.propose.v1",
+      "scope": "organization",
+      "purpose": "Propose managed outcome workstreams"
+    },
+    {
+      "name": "platform.workforce.search.v1",
+      "scope": "organization",
+      "purpose": "Find capable current, installed, marketplace, or human resources"
+    },
+    {
+      "name": "platform.agent-catalog.search.v1",
+      "scope": "organization",
+      "purpose": "Search installed, local-directory, first-party, and marketplace agents through the platform catalog"
+    },
+    {
+      "name": "platform.workforce-plan.propose.v1",
+      "scope": "organization",
+      "purpose": "Propose an explainable team plan for approval"
+    },
+    {
+      "name": "platform.finance-profile.read.v1",
+      "scope": "organization",
+      "purpose": "Ground staffing advice in financial goals and controls"
+    },
+    {
+      "name": "platform.finance-profile.propose-update.v1",
+      "scope": "organization",
+      "purpose": "Propose changes to financial goals or controls"
+    },
+    {
+      "name": "platform.budget.evaluate.v1",
+      "scope": "organization",
+      "purpose": "Check hard budget constraints before paid work"
+    },
+    {
+      "name": "platform.approval.propose.v1",
+      "scope": "organization",
+      "purpose": "Create separately gated action proposals"
+    },
+    {
+      "name": "platform.management-cycle.read.v1",
+      "scope": "organization",
+      "purpose": "Follow the configured management cadence"
+    },
+    {
+      "name": "memory.business.read.v1",
+      "scope": "organization",
+      "purpose": "Recall approved business context"
+    },
+    {
+      "name": "memory.business.propose.v1",
+      "scope": "organization",
+      "purpose": "Propose business memories"
+    },
+    {
+      "name": "memory.user.read.v1",
+      "scope": "user",
+      "purpose": "Recall approved user context"
+    },
+    {
+      "name": "memory.user.propose.v1",
+      "scope": "user",
+      "purpose": "Propose user memories"
+    },
+    {
+      "name": "communication.chat.read.v1",
+      "scope": "organization",
+      "purpose": "Find the Chief's protected CEO conversation for delegated executive questions"
+    },
+    {
+      "name": "agent.onboarding.complete.v1",
+      "scope": "organization",
+      "purpose": "Acknowledge completion of this installation's durable onboarding event"
+    },
+    {
+      "name": "communication.chat.create.v1",
+      "scope": "organization",
+      "purpose": "Open or reuse a direct conversation with the Chief's current manager"
+    },
+    {
+      "name": "communication.message.send.v1",
+      "scope": "organization",
+      "purpose": "Send Chief-of-Staff messages to conversations the agent belongs to"
+    },
+    {
+      "name": "product-management.plan.v1",
+      "scope": "organization",
+      "purpose": "Consult an active Product Manager sharing the Chief's CEO manager"
+    },
+    {
+      "name": "product-management.context.update.v1",
+      "scope": "organization",
+      "purpose": "Push authoritative role and decision updates to Product Managers sharing the Chief's CEO manager"
+    },
+    {
+      "name": "platform.hiring-recommendation.list.v1",
+      "scope": "organization",
+      "purpose": "Read this Chief of Staff installation's ranked role backlog"
+    },
+    {
+      "name": "platform.hiring-recommendation.upsert.v1",
+      "scope": "organization",
+      "purpose": "Maintain the ranked HR hiring backlog"
+    },
+    {
+      "name": "platform.hiring-recommendation.withdraw.v1",
+      "scope": "organization",
+      "purpose": "Withdraw suggestions removed by an approved resource-change revision or explicitly replaced by the owner"
+    },
+    {
+      "name": "platform.management.resource-change.read.v1",
+      "scope": "organization",
+      "purpose": "Read authoritative pending and approved resource-change requests"
+    },
+    {
+      "name": "platform.management.resource-change.decide.v1",
+      "scope": "organization",
+      "purpose": "Decide requests only when this Chief is the requester's current manager"
+    },
+    {
+      "name": "platform.user-action.suggest.v1",
+      "scope": "organization",
+      "purpose": "Attach safe platform-resolved workflow actions to Chief of Staff messages"
+    },
+    {
+      "name": "platform.management.status-report.v1",
+      "scope": "organization",
+      "purpose": "Submit the Chief's status report for an authorized management review."
+    },
+    {
+      "name": "platform.management.incident.read.v1",
+      "scope": "organization",
+      "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."
+    },
+    {
+      "name": "platform.management.incident.forward.v1",
+      "scope": "organization",
+      "purpose": "Inspect assigned project incidents and escalate through the authorized reporting hierarchy."
+    },
+    {
+      "name": "work.delegation.create.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.delegation.read.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.delegation.respond.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.delegation.publish.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.delegation.cancel.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.follow.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.unfollow.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.read.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.progress.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.pending.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    },
+    {
+      "name": "work.tracking.processed.v1",
+      "scope": "organization",
+      "purpose": "Use shared SDK delegation, authenticated recipient resolution, canonical work and durable reporting within existing resource authority.",
+      "modelVisible": false
+    }
   ],
   "events": {
-    "subscribes": ["com.csweet.calendar.reminder-due.v1", 
+    "subscribes": [
+      "com.csweet.calendar.reminder-due.v1",
       "com.csweet.agent.configuration-choice.answered.v1",
       "com.csweet.work.personal-todo.available.v1",
       "com.csweet.communication.message.mentioned.v1",
@@ -113,12 +564,27 @@
       "com.csweet.hiring-recommendation.fulfilled.v1",
       "com.csweet.project-health.review-due.v1",
       "com.csweet.management.incident.changed.v1",
-      "com.csweet.agent.attention.review-due.v1"
+      "com.csweet.agent.attention.review-due.v1",
+      "com.csweet.work.delegation.received.v1",
+      "com.csweet.work.tracking.changed.v1"
     ]
   },
   "configuration": [
-    { "key": "llmProviderId", "type": "provider", "label": "LLM provider", "required": true, "secret": false },
-    { "key": "llmModel", "type": "model", "label": "Model", "required": true, "secret": false, "dependsOnFieldKey": "llmProviderId" },
+    {
+      "key": "llmProviderId",
+      "type": "provider",
+      "label": "LLM provider",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "llmModel",
+      "type": "model",
+      "label": "Model",
+      "required": true,
+      "secret": false,
+      "dependsOnFieldKey": "llmProviderId"
+    },
     {
       "key": "maxContextWindowTokens",
       "type": "number",
@@ -142,19 +608,61 @@
       "defaultValue": 128000,
       "lessThanFieldKey": "maxContextWindowTokens"
     },
-    { "key": "businessOperatingProfile", "type": "select", "label": "Business operating profile", "required": true, "secret": false, "defaultValue": "general", "description": "Applies business-type organizational defaults while preserving the Chief's core boundaries.", "options": [
-      { "value": "general", "label": "General" },
-      { "value": "game-studio", "label": "Game Studio" },
-      { "value": "saas", "label": "SaaS" },
-      { "value": "ecommerce", "label": "E-commerce" },
-      { "value": "professional-services", "label": "Professional Services" },
-      { "value": "media-content", "label": "Media & Content" },
-      { "value": "custom", "label": "Custom" }
-    ] },
-    { "key": "customBusinessDescription", "type": "textarea", "label": "Custom business description", "required": true, "secret": false, "description": "Organizational context required when the Custom operating profile is selected.", "visibleWhenFieldKey": "businessOperatingProfile", "visibleWhenValue": "custom" }
+    {
+      "key": "businessOperatingProfile",
+      "type": "select",
+      "label": "Business operating profile",
+      "required": true,
+      "secret": false,
+      "defaultValue": "general",
+      "description": "Applies business-type organizational defaults while preserving the Chief's core boundaries.",
+      "options": [
+        {
+          "value": "general",
+          "label": "General"
+        },
+        {
+          "value": "game-studio",
+          "label": "Game Studio"
+        },
+        {
+          "value": "saas",
+          "label": "SaaS"
+        },
+        {
+          "value": "ecommerce",
+          "label": "E-commerce"
+        },
+        {
+          "value": "professional-services",
+          "label": "Professional Services"
+        },
+        {
+          "value": "media-content",
+          "label": "Media & Content"
+        },
+        {
+          "value": "custom",
+          "label": "Custom"
+        }
+      ]
+    },
+    {
+      "key": "customBusinessDescription",
+      "type": "textarea",
+      "label": "Custom business description",
+      "required": true,
+      "secret": false,
+      "description": "Organizational context required when the Custom operating profile is selected.",
+      "visibleWhenFieldKey": "businessOperatingProfile",
+      "visibleWhenValue": "custom"
+    }
   ],
   "credentials": [],
-  "webAccess": { "mode": "None", "rules": [] },
+  "webAccess": {
+    "mode": "None",
+    "rules": []
+  },
   "ui": [],
   "catalog": {
     "imageUrl": "https://raw.githubusercontent.com/CrosswiredStudios/CSweet.Agent.ChiefOfStaff/main/assets/branding/portrait-v1.jpg",
@@ -162,11 +670,24 @@
     "accentColor": "#384B76",
     "summary": "Turns executive direction into coordinated priorities, staffing plans, decisions, and follow-through across the company.",
     "category": "Leadership",
-    "role": { "key": "chief-of-staff", "name": "Chief of Staff" },
-    "license": { "spdxId": "LicenseRef-Proprietary" },
+    "role": {
+      "key": "chief-of-staff",
+      "name": "Chief of Staff"
+    },
+    "license": {
+      "spdxId": "LicenseRef-Proprietary"
+    },
     "iconUrls": [],
-    "roleAliases": ["Executive Operations Lead", "Operations Executive"],
-    "keywords": ["leadership", "organization", "workforce", "executive operations"],
+    "roleAliases": [
+      "Executive Operations Lead",
+      "Operations Executive"
+    ],
+    "keywords": [
+      "leadership",
+      "organization",
+      "workforce",
+      "executive operations"
+    ],
     "documentationUrl": "README.md"
   }
 }

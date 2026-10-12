@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet in `CSweet.Agent.ChiefOfStaff`.
 
-The agent uses `CSweet.Agent.SDK` 3.60.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 3.65.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -38,7 +38,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 3.60.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 3.65.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
@@ -50,7 +50,7 @@ Each `provides` entry in `csweet-plugin.json` is an exact durable work callback.
 
 ## Provider queue handling
 
-Uses SDK 3.51.0 for acknowledged LLM waiting, conversation activity, and host-authoritative deadline updates. Deploy the matching C-Sweet AgentHost and reimport this package to enable the private polling protocol.
+Uses SDK 3.65.0 for acknowledged LLM waiting, conversation activity, and host-authoritative deadline updates. Deploy the matching C-Sweet AgentHost and reimport this package to enable the private polling protocol.
 
 ## Initial operating-profile review (2.4.0)
 
@@ -108,10 +108,14 @@ Model token settings default to 256,000 context-window tokens (maxContextWindowT
 
 Management review reporting requires `platform.management.status-report.v1`. Version 2.11.0 declares this capability; approve the added grant when upgrading an existing installation. The host continues to authorize the report against the current management request.
 
-Chief 2.11.1 requires the published `CSweet.Agent.SDK` 3.62.1 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
+Chief 2.11.1 requires the published `CSweet.Agent.SDK` 3.65.0 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
 
 Chief 2.11.2 routes hiring setup using the current owner message separately from the model's conversation and memory prompt. Answering the mode question advances setup instead of restarting it when previous messages mention hiring preferences.
 
-Chief 2.11.4 completes hiring-preference answers with the saved next-question card instead of posting a second acknowledgement. The platform must support `terminal-question-message` turn completion before upgrading to this release.
+Chief 2.12.0 completes hiring-preference answers with the saved next-question card instead of posting a second acknowledgement. The platform must support `terminal-question-message` turn completion before upgrading to this release.
 
 Hiring candidate selection and its durable chat action finish before the final response is committed. Communications presents the selected agent with Hire and Browse Candidates actions.
+
+## Delegation and tracking
+
+SDK 3.65.0 dispatches authenticated delegation before specialist conversation fallback. The manifest requests delegation, work tracking, directory and conversation reads, personal commitments and model interpretation. These declarations require reviewed grants; existing resource permissions and approval rules still apply. The shared SDK owns coordinator reporting and wake recovery.
