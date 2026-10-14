@@ -116,9 +116,11 @@ Confidence must be between 0 and 1. Do not include markdown, tool calls, or inst
             throw new InvalidOperationException("The configuration decision identity is invalid.");
         var profile = BusinessOperatingProfiles.Find(answer.Value)
             ?? throw new InvalidOperationException("The configuration decision contains an unknown profile.");
+        if (await ReadFocusOnboardingAsync(answer.ConversationId, context, token) is not null ||
+            await BeginHiringPolicySetupAsync(answer.ConversationId, context, token)) return;
         // The platform has already persisted the employee override and queued its configuration refresh.
         var operatingContext = await _orchestrator.AssembleContextAsync(context, token);
-        await BeginFocusOnboardingAsync(answer.ConversationId, $"profile-choice:{answer.DecisionId:N}",
+        await BeginFocusOnboardingAsync(answer.ConversationId,
             operatingContext, profile, context, token);
     }
 

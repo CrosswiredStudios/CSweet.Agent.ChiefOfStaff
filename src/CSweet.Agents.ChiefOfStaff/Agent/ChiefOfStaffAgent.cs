@@ -246,12 +246,15 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
             return;
         }
-        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken) is { } questionMessageId)
+        if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken) is { } hiringAnswer)
         {
-            await context.ReportProgressAsync(new AssistantResponseChunk(conversationId, 0, string.Empty, true,
-                TurnId: incoming.TurnId, Kind: "terminal-question-message",
-                Metadata: new Dictionary<string, string> { ["messageId"] = questionMessageId.ToString("D") },
-                Attempt: incoming.Attempt), cancellationToken);
+            if (hiringAnswer.QuestionMessageId is { } questionMessageId)
+                await context.ReportProgressAsync(new AssistantResponseChunk(conversationId, 0, string.Empty, true,
+                    TurnId: incoming.TurnId, Kind: "terminal-question-message",
+                    Metadata: new Dictionary<string, string> { ["messageId"] = questionMessageId.ToString("D") },
+                    Attempt: incoming.Attempt), cancellationToken);
+            else
+                await turnStream.CommitAsync("Your hiring preferences are saved.", cancellationToken);
             return;
         }
         await turnStream.ActivityStartedAsync(
@@ -627,21 +630,39 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
             return;
         }
-        if (await BeginHiringPolicySetupAsync(onboarding.ConversationId, context, cancellationToken))
+        if (await ReadFocusOnboardingAsync(onboarding.ConversationId, context, cancellationToken) is not null ||
+            await BeginHiringPolicySetupAsync(onboarding.ConversationId, context, cancellationToken))
         {
             _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
             return;
         }
-        await BeginFocusOnboardingAsync(onboarding.ConversationId, $"agent-onboarded:{eventId:N}", operatingContext, profile, context, cancellationToken);
+        await BeginFocusOnboardingAsync(onboarding.ConversationId, operatingContext, profile, context, cancellationToken);
         _ = await context.Platform.Lifecycle.CompleteOnboardingAsync(message, cancellationToken);
 
         _logger.LogInformation("Chief of Staff completed onboarding event {EventId} in conversation {ConversationId}.", eventId, onboarding.ConversationId);
     }
 
-    private async Task<Guid> BeginFocusOnboardingAsync(Guid conversationId, string idempotencyKey,
-        ChiefOperatingContext operatingContext, BusinessOperatingProfile profile,
+    private static string FocusOnboardingKey(Guid conversationId) => $"chief.onboarding-focus:{conversationId:N}";
+
+    private static async Task<FocusOnboardingState?> ReadFocusOnboardingAsync(Guid conversationId,
         AgentRuntimeContext context, CancellationToken cancellationToken)
     {
+        var stored = await context.Platform.ReadOperatingStateAsync(
+            new AgentOperatingStateReadRequest(FocusOnboardingKey(conversationId)), cancellationToken);
+        return stored is null ? null : DeserializePayload<FocusOnboardingState>(stored.Payload)
+            ?? throw new InvalidOperationException("The saved onboarding focus state is empty.");
+    }
+
+    private sealed record FocusOnboardingState(Guid MessageId, Guid? AnswerTurnId);
+
+    private async Task<FocusOnboardingState> BeginFocusOnboardingAsync(Guid conversationId,
+        ChiefOperatingContext operatingContext, BusinessOperatingProfile profile,
+        AgentRuntimeContext context, CancellationToken cancellationToken, Guid? answerTurnId = null)
+    {
+        if (await ReadFocusOnboardingAsync(conversationId, context, cancellationToken) is { } existing) return existing;
+        // Scope every entry path to the same durable message and decision. A failure after either
+        // side effect can then retry safely, including after a process restart or policy revision.
+        var idempotencyKey = FocusOnboardingKey(conversationId);
         var openingMessage = BuildFocusOnboardingMessage(operatingContext, profile);
         await EnsureLeadershipCoverageAgendaAsync(profile, context, cancellationToken);
         var openingMessageId = await SendCommunicationMessageAsync(
@@ -657,7 +678,12 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             $"{idempotencyKey}:focus",
             context,
             cancellationToken);
-        return openingMessageId;
+        var saved = await context.Platform.WriteOperatingStateAsync(new AgentOperatingStateWriteRequest(
+            idempotencyKey, "com.csweet.chief.onboarding-focus", 1, "Presented",
+            new Dictionary<string, string>(), [], idempotencyKey, [], Guid.Empty,
+            SerializePayload(new FocusOnboardingState(openingMessageId, answerTurnId)), 0, idempotencyKey), cancellationToken);
+        return DeserializePayload<FocusOnboardingState>(saved.Payload)
+            ?? throw new InvalidOperationException("The saved onboarding focus state is empty.");
     }
 
     internal static string BuildFocusOnboardingMessage(

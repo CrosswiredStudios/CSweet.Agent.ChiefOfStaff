@@ -16,7 +16,7 @@ For the Game Studio profile, a pending or active Creative Director owns creative
 - Business onboarding selects a General, Game Studio, SaaS, E-commerce, Professional Services,
   Media & Content, or Custom operating profile. The Chief first infers whether that profile fits
   the saved company information, offers a preset switch only for a clear mismatch, and then
-  presents the existing bounded focus choice.
+  completes hiring preferences before presenting the existing bounded focus choice.
 - The runtime seeds a profile-aware leadership-coverage agenda in Backlog. It exposes one focus or
   hiring decision at a time, while CEO requests and active hiring work take precedence.
 - The deterministic runtime mirrors hiring recommendations to the Chief's own sequenced personal
@@ -56,9 +56,9 @@ Uses SDK 3.65.0 for acknowledged LLM waiting, conversation activity, and host-au
 
 Immediately after hiring, the Chief assesses the selected Business Operating Profile against the saved company information using the configured model. This required orchestration step precedes leadership coverage and focus selection. The assessment is persisted by onboarding event so retries do not produce a different recommendation.
 
-An appropriate profile, or insufficient evidence for a clearly better preset, continues directly to the existing focus phase. A clear mismatch displays the current mode and the suggested preset, with **Switch to …** and **Leave unchanged**. This decision has no Custom or Something else option. An already selected Custom profile is assessed using its description and may remain unchanged.
+An appropriate profile, or insufficient evidence for a clearly better preset, continues to hiring preferences and then company focus. A clear mismatch displays the current mode and the suggested preset, with **Switch to …** and **Leave unchanged**. This decision has no Custom or Something else option. An already selected Custom profile is assessed using its description and may remain unchanged.
 
-Accepting the switch saves only the Chief employee's profile override through the platform configuration service, preserving the model and other settings. Both choices resume focus selection through a durable event using the effective saved profile. A stale switch is rejected; Leave unchanged preserves the latest settings. Unavailable company data or invalid inference leaves onboarding retryable without creating a focus agenda.
+Accepting the switch saves only the Chief employee's profile override through the platform configuration service, preserving the model and other settings. Both choices resume onboarding through a durable event using the effective saved profile, completing hiring preferences before focus selection. A stale switch is rejected; Leave unchanged preserves the latest settings. Unavailable company data or invalid inference leaves onboarding retryable without creating a focus agenda.
 
 Deploy the matching platform changes before importing 2.4.0, and approve its operating-state grants and configuration-choice event subscription. The installation defaults remain General, with Custom available during installation.
 
@@ -113,6 +113,8 @@ Chief 2.11.1 requires the published `CSweet.Agent.SDK` 3.65.0 package, including
 Chief 2.11.2 routes hiring setup using the current owner message separately from the model's conversation and memory prompt. Answering the mode question advances setup instead of restarting it when previous messages mention hiring preferences.
 
 Chief 2.12.0 completes hiring-preference answers with the saved next-question card instead of posting a second acknowledgement. The platform must support `terminal-question-message` turn completion before upgrading to this release.
+
+Chief 2.12.1 routes profile-choice answers through hiring preferences before company focus. `BeginFocusOnboardingAsync` uses one conversation-scoped message/decision key and stores delivery in `chief.onboarding-focus:<conversationId>`. Retries and delayed callbacks reuse that delivery, while later hiring-preference changes receive a save acknowledgement without another company introduction. Existing conversation messages are preserved.
 
 Hiring candidate selection and its durable chat action finish before the final response is committed. Communications presents the selected agent with Hire and Browse Candidates actions.
 

@@ -53,7 +53,9 @@ public sealed partial class ChiefOfStaffAgent
         catch (PlatformCapabilityException) { return false; }
     }
 
-    private async Task<Guid?> HandleHiringPolicyAnswerAsync(Guid conversationId, Guid turnId, string text,
+    private sealed record HiringPolicyAnswerResult(Guid? QuestionMessageId);
+
+    private async Task<HiringPolicyAnswerResult?> HandleHiringPolicyAnswerAsync(Guid conversationId, Guid turnId, string text,
         AgentRuntimeContext context, CancellationToken token)
     {
         if (!text.StartsWith("Decision: ", StringComparison.Ordinal) ||
@@ -68,15 +70,18 @@ public sealed partial class ChiefOfStaffAgent
         catch (PlatformCapabilityException exception) when (exception.Code == PlatformCapabilityErrorCode.ValidationFailed)
         {
             var unchanged = await context.Platform.InvokeAsync<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, new { }, token);
-            return await AskHiringPolicyQuestionAsync(conversationId, unchanged, context, token, turnId.ToString("N"));
+            return new(await AskHiringPolicyQuestionAsync(conversationId, unchanged, context, token, turnId.ToString("N")));
         }
         catch (PlatformCapabilityException) { return null; }
-        if (!policy.SetupComplete) return await AskHiringPolicyQuestionAsync(conversationId, policy, context, token);
+        if (!policy.SetupComplete) return new(await AskHiringPolicyQuestionAsync(conversationId, policy, context, token));
         else
         {
             var operating = await _orchestrator.AssembleContextAsync(context, token);
-            return await BeginFocusOnboardingAsync(conversationId, $"hiring-policy-complete:{policy.InstallationId:N}:{policy.Revision}",
-                operating, BusinessOperatingProfiles.Resolve(Settings), context, token);
+            var focus = await BeginFocusOnboardingAsync(conversationId,
+                operating, BusinessOperatingProfiles.Resolve(Settings), context, token, turnId);
+            // Only this answer's own question message can complete its turn. Later settings
+            // changes acknowledge the save without reopening focus or reusing an older turn.
+            return new(focus.AnswerTurnId == turnId ? focus.MessageId : null);
         }
     }
 

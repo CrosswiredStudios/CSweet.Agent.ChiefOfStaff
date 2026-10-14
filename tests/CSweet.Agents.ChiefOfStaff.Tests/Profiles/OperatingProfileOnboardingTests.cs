@@ -227,6 +227,80 @@ public sealed class OperatingProfileOnboardingTests
         Assert.Contains("focus", Assert.Single(harness.Decisions.Values).Prompt, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ProfileChoice_CompletesHiringBeforeFocus_AndDelayedCallbacksDoNotRepeatIntroduction()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), false);
+        var harness = new Harness(Assessment(false, "game-studio", 0.95), hiringPolicy: policy);
+        await harness.HireAsync();
+        var answer = Event(ChiefOfStaffAgent.ConfigurationChoiceAnsweredEvent, Guid.NewGuid(), new
+        {
+            decisionId = Guid.NewGuid(), organizationId = harness.OrganizationId, conversationId = harness.ConversationId,
+            key = "businessOperatingProfile", value = "game-studio", selectedOptionId = "apply"
+        });
+        await harness.Agent.HandleEventAsync(answer, harness.Context, CancellationToken.None);
+        Assert.DoesNotContain(harness.Messages.Values, x => x.Contains("leadership coverage"));
+        Assert.Contains(harness.Decisions.Values, x => x.Prompt == "How should I help with hiring?");
+        Assert.Empty(harness.Todos);
+
+        var configured = await harness.Runtime.ExecuteCapabilityAsync(harness.Agent, AgentConfigurationCapabilities.Update,
+            new UpdateAgentConfigurationRequest(new Dictionary<string, JsonElement>
+            {
+                ["llmProviderId"] = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("D")),
+                ["llmModel"] = JsonSerializer.SerializeToElement("test-model"),
+                ["businessOperatingProfile"] = JsonSerializer.SerializeToElement("game-studio")
+            }));
+        Assert.True(configured.Succeeded);
+
+        await harness.AnswerHiringAsync("Decision: How should I help with hiring?\nAnswer: Recommend candidates");
+        Assert.DoesNotContain(harness.Messages.Values, x => x.Contains("leadership coverage"));
+        var turnId = Guid.NewGuid();
+        await harness.AnswerHiringAsync("Decision: Which publishers should I consider for hiring?\nAnswer: Prefer first-party", turnId);
+        var focus = Assert.Single(harness.Decisions.Values, x => x.Prompt.Contains("focus first"));
+        Assert.Equal("creative-product", focus.Options[0].Id);
+        var focusMessageId = focus.ConversationMessageId;
+        harness.Agent = harness.NewAgent();
+        await harness.Agent.HandleEventAsync(answer, harness.Context, CancellationToken.None);
+        await harness.HireAsync();
+        await harness.AnswerHiringAsync("Decision: Which publishers should I consider for hiring?\nAnswer: Prefer first-party", turnId);
+        Assert.Single(harness.Messages.Values, x => x.Contains("leadership coverage"));
+        Assert.Single(harness.Decisions.Values, x => x.Prompt.Contains("focus first"));
+        Assert.Equal(focusMessageId!.Value.ToString("D"), harness.Runtime.Progress.Last().GetProperty("metadata").GetProperty("messageId").GetString());
+    }
+
+    [Fact]
+    public async Task LaterHiringPreferenceChange_AcknowledgesSaveWithoutRepeatingFocus()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 1, new(), true, SetupStage: "complete");
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy);
+        await harness.HireAsync();
+        await harness.AnswerHiringAsync("Decision: How should I help with hiring?\nAnswer: Recommend candidates");
+        await harness.AnswerHiringAsync("Decision: Which publishers should I consider for hiring?\nAnswer: Prefer first-party");
+        Assert.Single(harness.Messages.Values, x => x.Contains("leadership coverage"));
+        Assert.Single(harness.Decisions.Values, x => x.Prompt.Contains("focus first"));
+        Assert.Contains(harness.Runtime.Progress, x => x.TryGetProperty("delta", out var delta) &&
+            delta.GetString() == "Your hiring preferences are saved.");
+    }
+
+    [Fact]
+    public async Task FocusStateWriteFailure_RetriesAfterRestartWithoutRepeatingMessageOrDecision()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 1, new(), true, SetupStage: "complete");
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy) { FailFocusStateWrites = true };
+        await Assert.ThrowsAsync<PlatformCapabilityException>(harness.HireAsync);
+        Assert.Equal(0, harness.Completions);
+        Assert.Single(harness.Messages);
+        Assert.Single(harness.Decisions);
+        Assert.DoesNotContain(harness.States.Keys, x => x.StartsWith("chief.onboarding-focus:"));
+        harness.Agent = harness.NewAgent();
+        harness.FailFocusStateWrites = false;
+        await harness.HireAsync();
+        Assert.Single(harness.Messages);
+        Assert.Single(harness.Decisions);
+        Assert.Contains(harness.States.Keys, x => x.StartsWith("chief.onboarding-focus:"));
+        Assert.Equal(1, harness.Completions);
+    }
+
     private static string Assessment(bool appropriate, string key, double confidence) => JsonSerializer.Serialize(new
         { currentProfileAppropriate = appropriate, recommendedProfileKey = key, confidence, reason = "The company develops its own games." });
     private static AgentEventEnvelope Event(string name, Guid id, object payload) => new(Guid.NewGuid(), id, name,
@@ -245,11 +319,13 @@ public sealed class OperatingProfileOnboardingTests
         public int Completions { get; private set; }
         public int CapturedHiringAnswers { get; private set; }
         public bool FailQuestions { get; set; }
+        public bool FailFocusStateWrites { get; set; }
         public Dictionary<string, AgentOperatingStateResponse> States { get; } = [];
         public Dictionary<string, string> Messages { get; } = [];
         public Dictionary<string, RequestUserInputRequest> Decisions { get; } = [];
         public Dictionary<string, JsonElement> Todos { get; } = [];
         private Dictionary<string, Guid> MessageIds { get; } = [];
+        private Dictionary<Guid, HiringPolicyResponse> CapturedHiringTurns { get; } = [];
         public Harness(string response, bool missingBusiness = false, HiringPolicyResponse? hiringPolicy = null)
         {
             Model = new FakeModel(response);
@@ -259,6 +335,10 @@ public sealed class OperatingProfileOnboardingTests
                     (request, _) => Task.FromResult(new AgentOperatingStateReadResponse(States.GetValueOrDefault(request.StateKey))))
                 .RegisterCapability<AgentOperatingStateWriteRequest, AgentOperatingStateResponse>(PlatformCapabilities.AgentOperatingStateWrite, (request, _) =>
                 {
+                    if (FailFocusStateWrites && request.StateKey.StartsWith("chief.onboarding-focus:"))
+                        throw new PlatformCapabilityException(PlatformCapabilities.AgentOperatingStateWrite,
+                            PlatformCapabilityErrorCode.Unavailable, "State service is temporarily unavailable.", retryable: true);
+                    if (States.TryGetValue(request.StateKey, out var existing)) return Task.FromResult(existing);
                     var now = DateTimeOffset.UtcNow;
                     var state = new AgentOperatingStateResponse(Guid.NewGuid(), request.StateKey, request.SchemaId, request.SchemaVersion,
                         request.Status, request.SourceRevisions, request.ConditionCodes, request.DecisionFingerprint,
@@ -300,8 +380,12 @@ public sealed class OperatingProfileOnboardingTests
                 runtime.RegisterCapability<JsonElement, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, (_, _) => Task.FromResult(hiringPolicy));
                 runtime.RegisterCapability<CaptureHiringPolicyDecisionRequest, HiringPolicyResponse>(HiringAutonomyCapabilities.CaptureDecision, (request, _) =>
                 {
+                    if (request.AnswerTurnId is { } previousTurn && CapturedHiringTurns.TryGetValue(previousTurn, out var captured))
+                        return Task.FromResult(captured);
                     CapturedHiringAnswers++;
-                    hiringPolicy = hiringPolicy with { Revision = hiringPolicy.Revision + 1, SetupStage = "publishers" };
+                    var stage = hiringPolicy.SetupStage == "publishers" ? "complete" : "publishers";
+                    hiringPolicy = hiringPolicy with { Revision = hiringPolicy.Revision + 1, SetupStage = stage, SetupComplete = stage == "complete" };
+                    if (request.AnswerTurnId is { } answerTurn) CapturedHiringTurns[answerTurn] = hiringPolicy;
                     return Task.FromResult(hiringPolicy);
                 });
             }
@@ -312,6 +396,10 @@ public sealed class OperatingProfileOnboardingTests
             new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
         public Task HireAsync() => Agent.HandleEventAsync(Event(ChiefOfStaffProfile.OnboardedEvent, EventId,
             new AgentOnboardedEvent(OrganizationId, EmployeeId, Guid.NewGuid(), ConversationId, DateTimeOffset.UtcNow)), Context, CancellationToken.None);
+        public Task AnswerHiringAsync(string text, Guid? turnId = null) => Agent.HandleEventAsync(
+            Event(ChiefOfStaffProfile.UserMessageReceivedEvent, Guid.NewGuid(),
+                new UserMessageReceived(Guid.NewGuid(), ConversationId.ToString("D"), Guid.NewGuid().ToString("D"), text, null, turnId ?? Guid.NewGuid())),
+            Context, CancellationToken.None);
     }
 
     private sealed class FakeModel(string response) : IChatClient, IAgentLlmClientFactory
