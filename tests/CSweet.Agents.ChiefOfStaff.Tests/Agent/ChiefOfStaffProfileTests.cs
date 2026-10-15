@@ -108,7 +108,7 @@ public sealed class ChiefOfStaffProfileTests
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
 
         Assert.Equal(
-            "AlwaysOn",
+            "OnDemand",
             manifest.RootElement
                 .GetProperty("runtime")
                 .GetProperty("defaultActivationMode")
