@@ -70,6 +70,12 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.13.4 runs startup/reconnect recovery in durable attention work instead of the unleased
+activation hook. The matching platform creates and binds personal audit cards before callbacks,
+chat preparation, model dispatch, memory enrichment and automatic hiring. Callbacks run one at
+a time for exact tool attribution; tracking cards do not execute themselves. Deploy the platform
+and upgrade through Installed Agents together. Provider-unreported token usage remains unknown.
+
 See [versioned release notes](releases/README.md). Add the matching note with every agent version change.
 
 

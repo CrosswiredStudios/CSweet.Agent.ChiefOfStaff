@@ -24,11 +24,22 @@ public sealed class ChiefOfStaffProfileTests
     }
 
     [Fact]
-    public void Agent_ReconcilesHiringTodosWhenItsSdkRuntimeActivates()
+    public void Agent_ExposesStartupHookForDurableAttentionRecovery()
     {
         Assert.Contains(
             typeof(IAgentActivationHandler),
             typeof(ChiefOfStaffAgent).GetInterfaces());
+    }
+
+    [Fact]
+    public async Task StartupDoesNotPerformUnleasedActions()
+    {
+        // No platform capability is registered: any startup read, mutation, model call
+        // or hiring attempt would fail this test instead of running outside a card.
+        var runtime = new AgentTestRuntime();
+        await CreateAgent().OnActivatedAsync(new AgentActivationContext(AgentActivationReason.OnDemand, "runtime", "tick", DateTimeOffset.UtcNow),
+            runtime.CreateContext(), CancellationToken.None);
+        Assert.Empty(runtime.Progress);
     }
 
     [Fact]

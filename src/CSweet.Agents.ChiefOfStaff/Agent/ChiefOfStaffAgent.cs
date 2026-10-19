@@ -76,18 +76,23 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
 
     public override string Version => ChiefOfStaffProfile.Version;
 
-    public async Task OnActivatedAsync(
+    public Task OnActivatedAsync(
         AgentActivationContext activation,
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        // Startup has no authenticated delivery lease. The durable attention review
+        // performs recovery after the host has created and bound its personal card.
+        return Task.CompletedTask;
+    }
+
+    protected override async Task HandleManagerAttentionReviewAsync(
+        AgentAttentionReviewContext review, AgentRuntimeContext context, CancellationToken cancellationToken)
+    {
         await ResumeProjectAssistanceAsync(context, cancellationToken);
         await RecoverApprovedHiringAsync(context, cancellationToken);
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
-        _logger.LogInformation(
-            "Chief of Staff reconciled its personal hiring queue during {ActivationReason} activation {TickId}.",
-            activation.Reason,
-            activation.TickId);
+        _logger.LogInformation("Chief of Staff reconciled its personal hiring queue during durable attention review {ReviewId}.", review.ReviewId);
     }
 
     protected override string ConfigurationSchemaVersion => ChiefOfStaffProfile.ConfigurationSchemaVersion;

@@ -14,7 +14,7 @@
   },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.13.3",
+  "version": "2.13.4",
   "publisher": {
     "id": "com.csweet",
     "name": "C-Sweet"
@@ -25,7 +25,7 @@
     "targetFramework": "net10.0",
     "defaultActivationMode": "OnDemand",
     "supportsMultipleInstallations": true,
-    "maximumConcurrentJobs": 20
+    "maximumConcurrentJobs": 1
   },
   "protocol": {
     "minimumVersion": "2.0",
