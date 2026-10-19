@@ -228,7 +228,7 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Contains("Do not assume a Product Manager", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("native bounded-choice widget", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("one proactive hiring recommendation at a time", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Marketplace owns candidate discovery", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("The deterministic runtime selects candidates and executes automatic hires", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deterministic Chief runtime mirrors", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not call `add_personal_todo`", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Do not call it from model responses", ChiefOfStaffProfile.SystemPrompt, StringComparison.OrdinalIgnoreCase);
@@ -376,6 +376,24 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Equal(1, submitted);
         Assert.Equal(needsReview ? 1 : 0, suggested.Count);
         Assert.Null(recommendation.SourceResourceChangeRequestId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ModelInstructionsUseLiveDelegationInsteadOfRememberedApprovals(bool automatic)
+    {
+        var runtime = new AgentTestRuntime().RegisterCapability<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read,
+            (_, _) => Task.FromResult(new HiringPolicyResponse(Guid.NewGuid(), 3,
+                new(automatic ? HiringSelectionMode.Automatic : HiringSelectionMode.RecommendCandidates,
+                    AutomaticHiringLevel.BroadDelegation, HiringPublisherPreference.FirstPartyOnly), true)));
+        var instructions = await ChiefOfStaffAgent.ReadHiringInstructionsAsync(runtime.CreateContext(), default);
+        Assert.Contains(automatic ? "Automatic hiring" : "owner candidate review is required", instructions);
+        if (automatic)
+        {
+            Assert.Contains("FirstPartyOnly", instructions);
+            Assert.Contains("Do not ask whether to proceed", instructions);
+        }
     }
 
     private static ChiefOfStaffAgent CreateAgent() => new(

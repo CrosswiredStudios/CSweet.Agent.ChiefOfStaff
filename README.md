@@ -70,6 +70,11 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.13.5 supplies the live hiring policy to model instructions and prevents a staffing
+mutation and an owner question from persisting in the same response. Automatic hiring needs
+no Marketplace readiness question or repeated hire confirmation. Deploy with the platform
+configuration-defaults fix, then upgrade through Installed Agents.
+
 Version 2.13.4 runs startup/reconnect recovery in durable attention work instead of the unleased
 activation hook. The matching platform creates and binds personal audit cards before callbacks,
 chat preparation, model dispatch, memory enrichment and automatic hiring. Callbacks run one at

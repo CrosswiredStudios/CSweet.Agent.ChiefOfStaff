@@ -9,6 +9,24 @@ namespace CSweet.Agents.ChiefOfStaff.Agent;
 
 public sealed partial class ChiefOfStaffAgent
 {
+    internal static async Task<string> ReadHiringInstructionsAsync(AgentRuntimeContext context, CancellationToken token)
+    {
+        try
+        {
+            var policy = await context.Platform.InvokeAsync<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, new { }, token);
+            if (policy.SetupComplete && policy.Settings.Mode == HiringSelectionMode.Automatic)
+                return $"Live platform hiring policy: Automatic hiring; authority {policy.Settings.AutomaticLevel}; publishers {policy.Settings.Publishers}. " +
+                    "Once the owner chooses a focus and a leadership gap is supported, upsert the recommendation and let the deterministic runtime hire within this policy. " +
+                    "Do not ask whether to proceed, move to Marketplace, review candidates, or confirm the selected hire. " +
+                    "Do not claim completion before the platform reports it. A real configuration or authority blocker needs only the missing input, not renewed hiring approval.";
+            return "Live platform hiring policy: owner candidate review is required. Select a supported staffing recommendation without asking whether to open Marketplace; the runtime supplies the review action.";
+        }
+        catch (PlatformCapabilityException)
+        {
+            return "Live hiring policy is unavailable. Do not infer automatic hiring authority from conversation or memory.";
+        }
+    }
+
     internal static string ReadCurrentUserMessage(UserMessageReceived incoming)
     {
         if (incoming.CurrentMessageContent is { } current) return current.Trim();

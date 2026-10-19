@@ -1619,9 +1619,11 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             new SessionStateMemoryPartitionResolver(memoryOptions),
             memoryOptions);
 
+        var hiringTurn = new HiringTurnTools();
         var tools = (await runtimeContext.GetModelToolsAsync(cancellationToken))
             .Where(tool => tool is not AIFunctionDeclaration function ||
                            IsModelToolAvailable(input, function.Name))
+            .Select(hiringTurn.Wrap)
             .ToList();
         if (tools.Any(tool => tool is AIFunctionDeclaration function &&
                             function.Name == "product_management_plan"))
@@ -1647,6 +1649,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 ChatOptions = await runtimeContext.Platform.Calendar.WithToolsAsync(new ChatOptions
                 {
                     Instructions = ChiefOfStaffProfile.SystemPrompt + "\n\n" +
+                        await ReadHiringInstructionsAsync(runtimeContext, cancellationToken) + "\n\n" +
                         (tools.OfType<AIFunctionDeclaration>().Any(x => x.Name == "ask_user")
                             ? "The ask_user tool is available in this turn. Prefer it for every question: offer likely answers the owner can select, then wait for the answer. Attach to the current chatTurnId when supplied; for a standalone message use its returned message ID."
                             : "The ask_user tool is unavailable in this turn. If an essential question is unavoidable, ask one concise plain-text question instead; do not invent a choice card."),
