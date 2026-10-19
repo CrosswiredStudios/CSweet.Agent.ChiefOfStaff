@@ -118,6 +118,8 @@ Chief 2.12.1 routes profile-choice answers through hiring preferences before com
 
 Hiring candidate selection and its durable chat action finish before the final response is committed. Communications presents the selected agent with Hire and Browse Candidates actions.
 
+Chief 2.13.3 recovers automatic hiring for its own standalone leadership recommendations as well as approved team plans. The matching platform update applies the owner's current policy to standalone leadership suggestions and preserves approval-time delegation for team plans. Automatic hires waiting for a build do not attach a manual Marketplace action; required review and configuration still use the shared hiring flow. Apply the platform update and upgrade through Installed Agents.
+
 ## Delegation and tracking
 
 SDK 4.1.1 dispatches authenticated delegation before specialist conversation fallback. The manifest requests delegation, work tracking, directory and conversation reads, personal commitments and model interpretation. These declarations require reviewed grants; existing resource permissions and approval rules still apply. The shared SDK owns coordinator reporting and wake recovery.

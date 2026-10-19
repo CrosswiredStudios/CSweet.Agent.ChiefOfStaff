@@ -94,7 +94,7 @@ public sealed partial class ChiefOfStaffAgent
             {
                 new("approved", "Approved packages", "Reuse packages and permissions you’ve already approved."),
                 new("bounded", "Within limits", "Install packages within your explicit cost and permission limits."),
-                new("broad", "Broad delegation", "Install eligible packages and grant their requested permissions for approved roles. This gives me the most authority and carries the greatest risk.")
+                new("broad", "Broad delegation", "Hire my own leadership recommendations and fill approved team roles. Install eligible packages and grant their requested permissions. This gives me the most authority and carries the greatest risk.")
             }, "approved"),
             "publishers" => ("Which publishers should I consider for hiring?", new List<RequestUserInputOption>
             {
@@ -117,7 +117,7 @@ public sealed partial class ChiefOfStaffAgent
             {
                 new("recommend", "Recommend candidates", "I’ll select a candidate; you review and confirm each hire."),
                 new("choose", "Choose candidates yourself", "I’ll explain the role and take you to filtered candidates."),
-                new("automatic", "Automatic hiring", "I’ll fill approved roles after we agree on my authority.")
+                new("automatic", "Automatic hiring", "I’ll hire my own leadership recommendations and fill approved team roles within the authority we agree on.")
             }, "recommend")
         };
         var key = $"hiring-policy:{policy.InstallationId:N}:{policy.SetupStage}:{policy.Revision}:{retry}";
@@ -141,7 +141,7 @@ public sealed partial class ChiefOfStaffAgent
             foreach (var plan in plans.Requests.Take(100))
                 await ReconcileApprovedResourceChangeAsync(plan, context, token);
             var backlog = await context.Platform.ListHiringRecommendationsAsync(token);
-            foreach (var recommendation in backlog.Recommendations.Where(x => x.SourceResourceChangeRequestId.HasValue && x.FulfilledHeadcount < x.Headcount).Take(100))
+            foreach (var recommendation in backlog.Recommendations.Where(x => x.FulfilledHeadcount < x.Headcount).Take(100))
                 _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
         }
         catch (PlatformCapabilityException exception)
@@ -160,7 +160,7 @@ public sealed partial class ChiefOfStaffAgent
             {
                 var result = await context.Platform.InvokeAsync<SubmitDelegatedHireRequest, DelegatedHireResponse>(
                     HiringAutonomyCapabilities.Submit, new(recommendationId), token);
-                if (result.Status == "Succeeded") return false;
+                if (result.Status is "Succeeded" or "Starting" or "Queued" or "Building" or "CompletingHire") return false;
             }
         }
         catch (PlatformCapabilityException) { /* A candidate-selection failure preserves the manual marketplace action. */ }

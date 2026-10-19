@@ -324,6 +324,49 @@ public sealed class ChiefOfStaffProfileTests
         Assert.Single(suggested);
     }
 
+    [Theory]
+    [InlineData("Succeeded", false)]
+    [InlineData("Starting", false)]
+    [InlineData("Queued", false)]
+    [InlineData("Building", false)]
+    [InlineData("CompletingHire", false)]
+    [InlineData("NeedsReview", true)]
+    [InlineData("NeedsSetup", true)]
+    [InlineData("Failed", true)]
+    public async Task AutomaticOwnRecommendation_OnlyAttachesManualActionWhenReviewIsNeeded(string status, bool needsReview)
+    {
+        var recommendation = NewRecommendation("Product Manager");
+        var (runtime, suggested) = CreateAttachmentRuntime(recommendation);
+        var candidate = new AvailableAgent("first-party:product", "com.csweet.product-manager",
+            AgentCatalogSource.FirstPartyCatalog, [], AgentAvailabilityState.AvailableToInstall, null,
+            "Product Manager", "Own product", "C-Sweet", "Product", [], [], [], 0, "USD", null, 0, null, null, 1, "First party");
+        var submitted = 0;
+        runtime.RegisterCapability<SelectHiringCandidateRequest, HiringCandidateSelectionResponse>(
+            HiringAutonomyCapabilities.SelectCandidate, (request, _) => Task.FromResult(
+                new HiringCandidateSelectionResponse(request.RecommendationId, HiringSelectionMode.Automatic, candidate, "Role fit")));
+        runtime.RegisterCapability<SubmitDelegatedHireRequest, DelegatedHireResponse>(
+            HiringAutonomyCapabilities.Submit, (request, _) =>
+            {
+                Assert.Equal(recommendation.Id, request.RecommendationId);
+                submitted++;
+                return Task.FromResult(new DelegatedHireResponse(request.RecommendationId, Guid.NewGuid(), status, null));
+            });
+        runtime.RegisterCapability<SuggestUserActionRequest, SuggestedUserActionResponse>(
+            PlatformCapabilities.UserActionSuggest, (request, _) =>
+            {
+                suggested.Add(request);
+                return Task.FromResult(new SuggestedUserActionResponse(Guid.NewGuid(), request.WorkflowType,
+                    request.Label, request.Description, "/marketplace", "Pending", DateTimeOffset.UtcNow));
+            });
+
+        await CreateAgent().AttachMentionedHiringActionAsync(Guid.NewGuid(), "I recommend a Product Manager.",
+            "automatic", runtime.CreateContext(), new HashSet<Guid>(), CancellationToken.None);
+
+        Assert.Equal(1, submitted);
+        Assert.Equal(needsReview ? 1 : 0, suggested.Count);
+        Assert.Null(recommendation.SourceResourceChangeRequestId);
+    }
+
     private static ChiefOfStaffAgent CreateAgent() => new(
         NullLogger<ChiefOfStaffAgent>.Instance,
         new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
