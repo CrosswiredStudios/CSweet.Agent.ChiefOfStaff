@@ -70,14 +70,16 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
-RC.3 reports the platform's current rollout/pause block when focus or leadership decisions are saved,
-instead of promising that disabled work will start. Saved choices remain available for recovery.
+The matching platform starts leadership assessment for every business and supported operating
+profile after focus selection. There is no rollout flag or business allowlist. Explicit owner
+pause/resume and existing hiring authority remain in force. Saved choices survive restarts.
 
-Version 2.14.1-rc.3 adds durable authenticated focus, evidence-based coverage, native clarification,
-one unresolved proactive recommendation and restart-safe outcome tracking. General and Game Studio
-are the first assessment profiles; other profiles retain onboarding. Deploy SDK 5.4.0 and the
-companion platform migrations/hidden grants before updating through Installed Agents. Proactive
-execution defaults off until G3 acceptance; pause for rollback and preserve state.
+Version 2.14.1-rc.4 adds durable authenticated focus, evidence-based coverage, native clarification,
+one unresolved proactive recommendation and restart-safe outcome tracking. Deploy SDK 5.4.0 or a
+compatible later version and the companion platform migrations/hidden grants before updating through
+Installed Agents. Normal leadership work starts without rollout configuration; an owner can pause
+new work while retaining existing commitments. Unavailable older platforms receive an accurate
+blocked-state confirmation instead of a promise to execute.
 
 This release also removes prose-created staffing effects, corrects hiring-preference routing,
 and deduplicates PM updates with persisted delivery/acknowledgment state. Deploy the companion

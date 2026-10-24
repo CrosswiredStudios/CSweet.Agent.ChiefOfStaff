@@ -83,7 +83,7 @@ public sealed partial class ChiefOfStaffAgent : IPersonalTodoClaimPolicy
                 (string.IsNullOrWhiteSpace(state.ConfigurationBlock)
                     ? "the platform has not enabled this leadership workflow."
                     : state.ConfigurationBlock) +
-                " Your selection is retained. An administrator must enable the workflow before I can assess coverage or recommend a hire.";
+                " Your selection is retained. The platform needs attention before I can assess coverage or recommend a hire.";
         if (state.Paused)
             return saved + " Proactive leadership is paused. Your selection is retained; ask me to resume proactive leadership when you are ready.";
         if (state.NextAssessmentId is not null)
