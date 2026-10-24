@@ -92,6 +92,8 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         await ResumeProjectAssistanceAsync(context, cancellationToken);
         await RecoverApprovedHiringAsync(context, cancellationToken);
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
+        await PushProductManagerContextUpdatesAsync(review.ReviewId, context, cancellationToken);
+        await ProcessLeadershipAsync(context, cancellationToken);
         _logger.LogInformation("Chief of Staff reconciled its personal hiring queue during durable attention review {ReviewId}.", review.ReviewId);
     }
 
@@ -159,6 +161,12 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         AgentRuntimeContext context,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (message.EventType == ChiefLeadershipCapabilities.Changed)
+        {
+            await ProcessLeadershipAsync(context, cancellationToken);
+            return;
+        }
         foreach (var handler in _eventHandlers)
         {
             if (!string.Equals(handler.EventType, message.EventType, StringComparison.Ordinal))
@@ -188,13 +196,13 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
 
         if (string.Equals(message.EventType, ManagementEvents.ResourceChangeRequested, StringComparison.Ordinal))
         {
-            await HandleResourceChangeRequestedAsync(message, context, cancellationToken);
+            await DispatchResourceChangeAsync(message, context, cancellationToken);
             return;
         }
 
         if (string.Equals(message.EventType, ManagementEvents.ResourceChangeDecided, StringComparison.Ordinal))
         {
-            await HandleResourceChangeDecidedAsync(message, context, cancellationToken);
+            await DispatchResourceChangeAsync(message, context, cancellationToken);
             return;
         }
 
@@ -214,6 +222,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             if (string.Equals(message.EventType, WorkforceEvents.Changed, StringComparison.Ordinal))
                 await ReconcileGameStudioCreativeOwnershipAsync(message.EventId, context, cancellationToken);
             await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+            await ProcessLeadershipAsync(context, cancellationToken);
             return;
         }
 
@@ -222,9 +231,19 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             return;
         }
 
-        var incoming = DeserializePayload<UserMessageReceived>(message.Data);
+        UserMessageReceived? incoming;
+        try { incoming = DeserializePayload<UserMessageReceived>(message.Data); }
+        catch (JsonException)
+        {
+            _logger.LogWarning("Ignored invalid user message JSON in event {EventId}.", message.EventId);
+            return;
+        }
 
         if (incoming is null ||
+            !Guid.TryParse(incoming.ConversationId, out var parsedConversationId) || parsedConversationId == Guid.Empty ||
+            !Guid.TryParse(context.BusinessId, out var organizationId) || organizationId == Guid.Empty ||
+            !Guid.TryParse(context.InstallationId, out var installationId) || installationId == Guid.Empty ||
+            incoming.TurnId == Guid.Empty ||
             incoming.ProviderProfileId == Guid.Empty ||
             string.IsNullOrWhiteSpace(incoming.Message))
         {
@@ -240,17 +259,14 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         var startedAt = DateTimeOffset.UtcNow;
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var sequence = 0;
+        var hiringTurn = new HiringTurnTools();
         await using var turnStream = context.CreateTurnStream(
             conversationId,
             incoming.TurnId,
             incoming.Attempt);
 
         var currentMessage = ReadCurrentUserMessage(incoming);
-        if (await TryStartHiringPolicyChangeAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken))
-        {
-            await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
-            return;
-        }
+        if (await TryHandleLeadershipInputAsync(incoming, context, turnStream, cancellationToken)) return;
         if (await HandleHiringPolicyAnswerAsync(Guid.Parse(conversationId), incoming.TurnId, currentMessage, context, cancellationToken) is { } hiringAnswer)
         {
             if (hiringAnswer.QuestionMessageId is { } questionMessageId)
@@ -259,7 +275,12 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
                     Metadata: new Dictionary<string, string> { ["messageId"] = questionMessageId.ToString("D") },
                     Attempt: incoming.Attempt), cancellationToken);
             else
-                await turnStream.CommitAsync("Your hiring preferences are saved.", cancellationToken);
+                await turnStream.CommitAsync(hiringAnswer.Acknowledgment, cancellationToken);
+            return;
+        }
+        if (await TryStartHiringPolicyChangeAsync(parsedConversationId, incoming.TurnId, currentMessage, context, cancellationToken))
+        {
+            await turnStream.CommitAsync("Let’s update my hiring preferences.", cancellationToken);
             return;
         }
         await turnStream.ActivityStartedAsync(
@@ -307,7 +328,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
                 ChiefOfStaffProfile.ConverseCapability,
                 context,
                 operatingContext: null,
-                cancellationToken))
+                cancellationToken, hiringTurn))
             {
                 if (update.Usage is not null)
                 {
@@ -388,24 +409,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         await turnStream.ActivityStartedAsync(
             "Validating executive follow-up actions.",
             cancellationToken: cancellationToken);
-        // These steps refine durable side effects after the answer exists. A failure here must not
-        // replace the committed reply with the platform's generic fallback, so each step degrades alone.
-        try
-        {
-            await EnsureDefaultProductManagerRecommendationAsync(
-                response,
-                requestedWorkstreamId,
-                $"user-message:{message.EventId:N}",
-                context,
-                cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogWarning(
-                exception,
-                "Chief of Staff could not validate the default product-manager recommendation for conversation {ConversationId}.",
-                conversationId);
-        }
+        // Staffing mutations are explicit tool/workflow effects. Prose never creates them.
         try
         {
             await SyncHiringPersonalTodosAsync(
@@ -433,11 +437,14 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             sequence,
             response.Length);
 
-        await CommitResponseWithHiringActionAsync(
-            incoming.TurnId, response, $"user-message:{message.EventId}", context,
-            knownRecommendationIds, turnStream, cancellationToken);
-        if (response.Contains("hiring", StringComparison.OrdinalIgnoreCase))
-            _ = await BeginHiringPolicySetupAsync(Guid.Parse(conversationId), context, cancellationToken);
+        // Persist and acknowledge required delivery work before the final turn commit.
+        await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
+        if (hiringTurn.QuestionAsked)
+            await turnStream.CommitAsync(response, cancellationToken);
+        else
+            await CommitResponseWithHiringActionAsync(
+                incoming.TurnId, response, $"user-message:{message.EventId}", context,
+                knownRecommendationIds, turnStream, cancellationToken);
 
         _logger.LogInformation(
             "Chief of Staff completed streaming for conversation {ConversationId}. Chunks {ChunkCount}. ResponseLength {ResponseLength}.",
@@ -445,23 +452,14 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
             sequence,
             response.Length);
 
-
-        try
-        {
-            await PushProductManagerContextUpdatesAsync(message.EventId, context, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogWarning(
-                exception,
-                "Chief of Staff could not push product-management context updates after conversation {ConversationId}.",
-                conversationId);
-        }
     }
 
     public override async Task<PersonalTodoResult> HandlePersonalTodoAsync(
         PersonalTodoItem item, AgentRuntimeContext context, CancellationToken cancellationToken)
     {
+        if (item.CorrelationId?.StartsWith(ResourceReviewPrefix, StringComparison.Ordinal) == true)
+            return await RetryResourceReviewAsync(item.CorrelationId, context, cancellationToken);
+
         if (TryGetHiringRecommendationId(item.CorrelationId, out var recommendationId))
         {
             var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
@@ -601,7 +599,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
 
             return new AgentWorkResult(true, SerializePayload(response));
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogError(
                 exception,
@@ -669,7 +667,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         // side effect can then retry safely, including after a process restart or policy revision.
         var idempotencyKey = FocusOnboardingKey(conversationId);
         var openingMessage = BuildFocusOnboardingMessage(operatingContext, profile);
-        await EnsureLeadershipCoverageAgendaAsync(profile, context, cancellationToken);
         var openingMessageId = await SendCommunicationMessageAsync(
             conversationId,
             openingMessage,
@@ -719,20 +716,13 @@ impossible, or denied. Otherwise perform the task and return a concise completio
     {
         try
         {
-            var options = profile.FocusOptions
-                .Select(x => new RequestUserInputOption(x.Id, x.Label, x.Description))
-                .ToList();
-            _ = await context.Platform.InvokeAsync<RequestUserInputRequest, RequestUserInputResponse>(
-                ChiefOfStaffProfile.RequestUserInputCapability,
-                new RequestUserInputRequest(
-                    conversationId,
-                    null,
-                    messageId,
-                    "Where would you like the company to focus first?",
-                    options,
-                    options[0].Id,
-                    idempotencyKey),
-                cancellationToken);
+            var snapshot = await context.Platform.ChiefLeadership.ReadAsync(token: cancellationToken);
+            var presented = await context.Platform.ChiefLeadership.PresentAsync(new(profile.Key, 1, conversationId, messageId,
+                profile.FocusOptions.Select((x, index) => new ChiefCoverageDomain(x.Id, x.Label, x.Description, index + 1)).ToArray(),
+                snapshot.FocusRevision, idempotencyKey), cancellationToken);
+            if (presented.AnswerTurnId is { } answerTurn)
+                await context.Platform.ChiefLeadership.CaptureAsync(new(answerTurn, presented.FocusRevision,
+                    $"chief-focus-answer:{answerTurn:N}", presented.DecisionId), cancellationToken);
         }
         catch (PlatformCapabilityException exception)
         {
@@ -743,42 +733,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             // Focus selection is a required interaction. Keep the durable callback retryable
             // instead of acknowledging a question for which the user has no choice card.
             throw;
-        }
-    }
-
-    private async Task EnsureLeadershipCoverageAgendaAsync(
-        BusinessOperatingProfile profile,
-        AgentRuntimeContext context,
-        CancellationToken cancellationToken)
-    {
-        if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
-            throw new InvalidOperationException("The Chief of Staff employee identity is unavailable.");
-        var directory = await context.Platform.PersonalTodo.ListAsync(cancellationToken);
-        var existing = directory.Boards
-            .SingleOrDefault(x => x.OwnerOrganizationUserId == chiefId)?
-            .Items.Select(x => x.CorrelationId)
-            .Where(x => x is not null)
-            .ToHashSet(StringComparer.Ordinal) ?? [];
-
-        foreach (var item in profile.LeadershipCoverage)
-        {
-            var correlationId = $"leadership-coverage:{profile.Key}:{item.Id}";
-            if (existing.Contains(correlationId)) continue;
-            _ = await context.Platform.PersonalTodo.AddAsync(
-                new AddPersonalTodoItemRequest(
-                    item.Title,
-                    item.Description,
-                    WorkPriorities.Medium,
-                    null,
-                    $"leadership-coverage:{profile.Key}:{item.Id}:personal-todo",
-                    null,
-                    null,
-                    null,
-                    correlationId)
-                {
-                    StartInBacklog = true
-                },
-                cancellationToken);
         }
     }
 
@@ -793,7 +747,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             new ResourceChangeReadRequest(resourceEvent.RequestId),
             cancellationToken);
         var request = read.Requests.SingleOrDefault(x => x.Id == resourceEvent.RequestId);
-        if (request is null) return;
+        if (request is null || !request.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase)) return;
 
         var (_, self, organization) = await RequireActiveChiefAsync(context, cancellationToken);
         var requester = organization.People.SingleOrDefault(x =>
@@ -832,14 +786,15 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         var read = await context.Platform.ReadResourceChangesAsync(
             new ResourceChangeReadRequest(resourceEvent.RequestId),
             cancellationToken);
-        var request = read.Requests.SingleOrDefault(x =>
-            x.Id == resourceEvent.RequestId &&
-            x.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase));
+        var request = read.Requests.SingleOrDefault(x => x.Id == resourceEvent.RequestId);
         if (request is null)
         {
-            throw new InvalidOperationException(
-                $"Approved resource change {resourceEvent.RequestId:D} was delivered to the Chief of Staff but is not visible through its granted organization resource-change capability.");
+            throw new ChiefWorkBlockedException("chief.resource_change_missing",
+                "The approved resource change is unavailable. Review its visibility and current approval before retrying this task.");
         }
+
+        // A delayed approval notification must not revive a superseded or revoked plan.
+        if (!request.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase)) return;
 
         await ReconcileApprovedResourceChangeAsync(request, context, cancellationToken);
     }
@@ -864,14 +819,29 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             var stableRoleKey = delta.Role.RoleKey;
             if (delta.ChangeKind.Equals("Remove", StringComparison.OrdinalIgnoreCase))
             {
+                // Follow the approved request's lineage, never every recommendation of a role.
+                var sourceIds = new HashSet<Guid> { request.Id };
+                var predecessorId = request.SupersedesRequestId;
+                while (predecessorId is { } previous && sourceIds.Add(previous))
+                {
+                    var prior = (await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(previous), cancellationToken))
+                        .Requests.SingleOrDefault(x => x.Id == previous && x.OrganizationId == request.OrganizationId &&
+                            x.RequesterInstallationId == request.RequesterInstallationId && x.TeamId == request.TeamId);
+                    if (prior is null) { sourceIds.Remove(previous); break; }
+                    predecessorId = prior.SupersedesRequestId;
+                    if (sourceIds.Count >= 100)
+                        throw new ChiefWorkBlockedException("chief.resource_lineage_limit",
+                            "The resource-change history exceeds the safe reconciliation limit. Review its lineage before retrying this task.");
+                }
                 foreach (var existing in backlog.Recommendations.Where(x =>
-                             string.Equals(x.RoleKey, stableRoleKey, StringComparison.Ordinal)))
+                             string.Equals(x.RoleKey, stableRoleKey, StringComparison.Ordinal) && x.TeamId == request.TeamId &&
+                             x.SourceResourceChangeRequestId is { } source && sourceIds.Contains(source)))
                 {
                     _ = await context.Platform.WithdrawHiringRecommendationAsync(
                         new WithdrawHiringRecommendationRequest(
                             existing.Id,
                             $"Removed by approved resource-change request {request.Id:D}.",
-                            $"resource-change:{request.Id:N}:withdraw:{NormalizeKey(delta.Role.RoleKey)}"),
+                            $"resource-change:{request.Id:N}:withdraw:{existing.Id:N}"),
                         cancellationToken);
                 }
                 continue;
@@ -946,15 +916,15 @@ impossible, or denied. Otherwise perform the task and return a concise completio
     {
         if (!Guid.TryParse(context.InstallationId, out var installationId) ||
             !Guid.TryParse(context.Identity?.EmployeeId, out var employeeId))
-            throw new InvalidOperationException("The Chief of Staff identity is unavailable.");
+            throw new ChiefWorkBlockedException("chief.identity_missing", "The Chief identity is unavailable. Review the active installation before retrying this task.");
         var operatingContext = await _orchestrator.AssembleContextAsync(context, cancellationToken);
         var organization = operatingContext.Organization
-            ?? throw new InvalidOperationException("The organization snapshot is unavailable.");
+            ?? throw new ChiefWorkBlockedException("chief.organization_missing", "Current organization data is unavailable. Restore access before retrying this task.");
         var self = organization.People.SingleOrDefault(x =>
             x.Id == employeeId &&
             x.AgentInstallationId == installationId &&
             x.IsActive)
-            ?? throw new InvalidOperationException("This installation is not the active Chief of Staff.");
+            ?? throw new ChiefWorkBlockedException("chief.installation_inactive", "This installation is no longer the active Chief. Review the replacement installation before retrying this task.");
         return (installationId, self, organization);
     }
 
@@ -967,7 +937,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             ? organization.People.SingleOrDefault(x => x.Id == self.ReportsToId.Value && x.IsActive)
             : null;
         if (manager is null)
-            throw new InvalidOperationException("The Chief of Staff has no active manager.");
+            throw new ChiefWorkBlockedException("chief.manager_missing", "The Chief has no active manager. Assign the reporting relationship before retrying this task.");
         var hub = await context.Platform.InvokeAsync<JsonElement, CommunicationHubResponse>(
             ChiefOfStaffProfile.ReadCommunicationCapability,
             JsonSerializer.Deserialize<JsonElement>("{}"),
@@ -1054,42 +1024,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 context,
                 cancellationToken);
         }
-    }
-
-    private async Task EnsureDefaultProductManagerRecommendationAsync(
-        string response,
-        Guid? workstreamId,
-        string idempotencyPrefix,
-        AgentRuntimeContext context,
-        CancellationToken cancellationToken)
-    {
-        var recommendsProductManager = SharedFormatter.SplitResponseSegments(response).Any(segment =>
-            segment.Contains("Product Manager", StringComparison.OrdinalIgnoreCase) &&
-            SharedFormatter.IsHiringRecommendationLine(segment));
-        if (!recommendsProductManager) return;
-
-        var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
-        if (backlog.Recommendations.Any(x =>
-                GameStudioOwnershipPolicy.IsGameProducer(x) &&
-                (workstreamId is { } scope
-                    ? x.WorkstreamId == scope
-                    : x.WorkstreamId is null)))
-            return;
-
-        _ = await context.Platform.UpsertHiringRecommendationAsync(
-            new UpsertHiringRecommendationRequest(
-                "Product Manager",
-                "Own customer discovery, product outcomes, strategy, roadmap, prioritization, requirements, and product-team design.",
-                workstreamId,
-                [],
-                null,
-                $"{idempotencyPrefix}:recommendation:product-manager")
-            {
-                Priority = 1,
-                RoleKey = "product-manager",
-                Headcount = 1
-            },
-            cancellationToken);
     }
 
     private async Task<string> ApplyGameStudioOwnershipGuardAsync(
@@ -1184,7 +1118,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         CancellationToken cancellationToken)
     {
         var backlog = await context.Platform.ListHiringRecommendationsAsync(cancellationToken);
-        if (backlog.Recommendations.Count == 0) return;
         if (!Guid.TryParse(context.Identity?.EmployeeId, out var chiefId))
         {
             _logger.LogWarning(
@@ -1564,7 +1497,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         string capability,
         AgentRuntimeContext runtimeContext,
         ChiefOperatingContext? operatingContext,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken,
+        HiringTurnTools? hiringTurn = null)
     {
         _logger.LogInformation(
             "Chief of Staff resolving chat client for provider {ProviderProfileId} and conversation {ConversationId}.",
@@ -1619,7 +1553,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             new SessionStateMemoryPartitionResolver(memoryOptions),
             memoryOptions);
 
-        var hiringTurn = new HiringTurnTools();
+        hiringTurn ??= new HiringTurnTools();
         var tools = (await runtimeContext.GetModelToolsAsync(cancellationToken))
             .Where(tool => tool is not AIFunctionDeclaration function ||
                            IsModelToolAvailable(input, function.Name))
@@ -1800,7 +1734,9 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             operatingContext,
             chiefId,
             productManager.Id);
-        var sourceId = input.MessageId != Guid.Empty ? input.MessageId : Guid.NewGuid();
+        var sourceId = input.MessageId != Guid.Empty ? input.MessageId : input.ChatTurnId;
+        if (sourceId == Guid.Empty)
+            throw new InvalidOperationException("A product consultation requires a stable source message or turn identity.");
         var request = new ProductPlanRequest(
             brief,
             string.IsNullOrWhiteSpace(focus) ? "Provide a product recommendation for the current executive request." : focus.Trim(),
@@ -1982,7 +1918,6 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             person.Id == chiefId &&
             person.IsActive);
         if (chief is null) return;
-        var sourceId = sourceEventId;
         var productManagers = organization.People
             .Where(person => IsProductManagerLiaison(chief, person, organization))
             .ToList();
@@ -1995,23 +1930,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 operatingContext,
                 chiefId,
                 productManager.Id);
-            _ = sourceEventId;
-            var update = await context.Platform.InvokeAsync<ProductContextUpdateRequest, ProductContextUpdateResponse>(
-                ProductManagementCapabilities.ContextUpdate,
-                new ProductContextUpdateRequest(
-                    brief,
-                    sourceId,
-                    $"product-context:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
-                cancellationToken);
-            if (!update.PlanRefreshRequired) continue;
-            var plan = await context.Platform.InvokeAsync<ProductPlanRequest, ProductPlanResponse>(
-                ProductManagementCapabilities.Plan,
-                new ProductPlanRequest(
-                    brief,
-                    "Refresh the product strategy, roadmap themes, product-team structure, and hiring sequence after this authoritative context change.",
-                    sourceId,
-                    $"product-refresh-plan:{productManager.Id:D}:{sourceId:D}:{brief.ContextRevision}"),
-                cancellationToken);
+            await DeliverProductContextAsync(productManager.Id, agentInstallationId, brief,
+                operatingContext, context, cancellationToken);
         }
     }
 

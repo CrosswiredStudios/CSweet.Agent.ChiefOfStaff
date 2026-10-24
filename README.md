@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet in `CSweet.Agent.ChiefOfStaff`.
 
-The agent uses `CSweet.Agent.SDK` 4.1.1 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 5.4.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -38,7 +38,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 4.1.1, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 5.4.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
@@ -50,7 +50,7 @@ Each `provides` entry in `csweet-plugin.json` is an exact durable work callback.
 
 ## Provider queue handling
 
-Uses SDK 4.1.1 for acknowledged LLM waiting, conversation activity, and host-authoritative deadline updates. Deploy the matching C-Sweet AgentHost and reimport this package to enable the private polling protocol.
+Uses SDK 5.4.0 for acknowledged LLM waiting, conversation activity, and host-authoritative deadline updates. Deploy the matching C-Sweet AgentHost and reimport this package to enable the private polling protocol.
 
 ## Initial operating-profile review (2.4.0)
 
@@ -69,6 +69,18 @@ The Chief prefers `ask_user` whenever it needs an answer and the tool is availab
 Restart the matching platform services after deploying profile-choice support: older AgentHost schemas reject `configurationChange`. Version 2.4.1 omits that optional property on ordinary questions. Reimporting this package gives a previously failed onboarding event a fresh package delivery, reusing its original assessment and message keys.
 
 ## Release notes
+
+Version 2.14.1-rc.2 adds durable authenticated focus, evidence-based coverage, native clarification,
+one unresolved proactive recommendation and restart-safe outcome tracking. General and Game Studio
+are the first assessment profiles; other profiles retain onboarding. Deploy SDK 5.4.0 and the
+companion platform migrations/hidden grants before updating through Installed Agents. Proactive
+execution defaults off until G3 acceptance; pause for rollback and preserve state.
+
+This release also removes prose-created staffing effects, corrects hiring-preference routing,
+and deduplicates PM updates with persisted delivery/acknowledgment state. Deploy the companion
+platform hiring-card cancellation, fulfillment and concurrency fixes before upgrading through
+Installed Agents. Three previously unhandled notification subscriptions are removed; durable
+manager-report intake remains future work.
 
 Version 2.13.5 supplies the live hiring policy to model instructions and prevents a staffing
 mutation and an owner question from persisting in the same response. Automatic hiring needs
@@ -133,10 +145,10 @@ Chief 2.13.3 recovers automatic hiring for its own standalone leadership recomme
 
 ## Delegation and tracking
 
-SDK 4.1.1 dispatches authenticated delegation before specialist conversation fallback. The manifest requests delegation, work tracking, directory and conversation reads, personal commitments and model interpretation. These declarations require reviewed grants; existing resource permissions and approval rules still apply. The shared SDK owns coordinator reporting and wake recovery.
+SDK 5.4.0 dispatches authenticated delegation before specialist conversation fallback. The manifest requests delegation, work tracking, directory and conversation reads, personal commitments and model interpretation. These declarations require reviewed grants; existing resource permissions and approval rules still apply. The shared SDK owns coordinator reporting and wake recovery.
 
 ## Shared manager blocker reporting
 
-This release uses SDK 4.1.1 `ManagerIncidentCoordinator` for evidence-based incident reports and human-selected fixes. The shared SDK dispatcher runs before this agent's specialist intake, coordinates authorized recovery or delegation, and preserves required approvals. The incident presentation/update and resolution/read grants plus `com.csweet.management.incident.owner-report-requested.v1` allow existing open incidents to receive refreshed reports. Apply the platform migration before upgrading.
+This release uses SDK 5.4.0 `ManagerIncidentCoordinator` for evidence-based incident reports and human-selected fixes. The shared SDK dispatcher runs before this agent's specialist intake, coordinates authorized recovery or delegation, and preserves required approvals. The incident presentation/update and resolution/read grants plus `com.csweet.management.incident.owner-report-requested.v1` allow existing open incidents to receive refreshed reports. Apply the platform migration before upgrading.
 
 Activation defaults to OnDemand. Durable messages, assignments, scheduled duties and attention reviews wake the agent; idle runtimes release their Office slot. Attention wakes require the platform scheduler that supports sleeping OnDemand installations. Existing installations retain their selected activation mode until their schedule is updated.

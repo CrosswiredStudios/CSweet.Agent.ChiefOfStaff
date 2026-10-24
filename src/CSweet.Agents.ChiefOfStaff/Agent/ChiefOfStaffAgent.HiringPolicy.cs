@@ -57,11 +57,7 @@ public sealed partial class ChiefOfStaffAgent
 
     private static async Task<bool> TryStartHiringPolicyChangeAsync(Guid conversationId, Guid turnId, string text, AgentRuntimeContext context, CancellationToken token)
     {
-        if (text.StartsWith("Decision: ", StringComparison.Ordinal) ||
-            !(text.Contains("hire automatically", StringComparison.OrdinalIgnoreCase) ||
-              text.Contains("automatically hire", StringComparison.OrdinalIgnoreCase) ||
-              text.Contains("hiring", StringComparison.OrdinalIgnoreCase) &&
-              (text.Contains("change", StringComparison.OrdinalIgnoreCase) || text.Contains("autonomy", StringComparison.OrdinalIgnoreCase) || text.Contains("preferences", StringComparison.OrdinalIgnoreCase)))) return false;
+        if (turnId == Guid.Empty || !IsHiringPolicyChangeRequest(text)) return false;
         try
         {
             var policy = await context.Platform.InvokeAsync<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, new { }, token);
@@ -71,12 +67,30 @@ public sealed partial class ChiefOfStaffAgent
         catch (PlatformCapabilityException) { return false; }
     }
 
-    private sealed record HiringPolicyAnswerResult(Guid? QuestionMessageId);
+    internal static bool IsHiringPolicyChangeRequest(string text)
+    {
+        text = text.Trim();
+        // A question about policy is informational. Do not open setup from quoted history,
+        // an answer's presentation text, or the assistant's response.
+        if (text.StartsWith("Decision:", StringComparison.OrdinalIgnoreCase) ||
+            !new[] { "change ", "update ", "set ", "switch ", "please change ", "please update ", "please set ", "please switch ",
+                "let's change ", "let’s change ", "i want to change ", "i would like to update ",
+                "can you change ", "could you update ", "would you change ", "hire automatically", "automatically hire" }
+                .Any(prefix => text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+            !(text.Contains("hire automatically", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("automatically hire", StringComparison.OrdinalIgnoreCase) ||
+              text.Contains("hiring", StringComparison.OrdinalIgnoreCase) &&
+              (text.Contains("mode", StringComparison.OrdinalIgnoreCase) || text.Contains("autonomy", StringComparison.OrdinalIgnoreCase) || text.Contains("preferences", StringComparison.OrdinalIgnoreCase)))) return false;
+        return true;
+    }
+
+    private sealed record HiringPolicyAnswerResult(Guid? QuestionMessageId,
+        string Acknowledgment = "Your hiring preferences are saved.");
 
     private async Task<HiringPolicyAnswerResult?> HandleHiringPolicyAnswerAsync(Guid conversationId, Guid turnId, string text,
         AgentRuntimeContext context, CancellationToken token)
     {
-        if (!text.StartsWith("Decision: ", StringComparison.Ordinal) ||
+        if (turnId == Guid.Empty || !text.StartsWith("Decision: ", StringComparison.Ordinal) ||
             !(text.Contains("hiring", StringComparison.OrdinalIgnoreCase) || text.Contains("publisher", StringComparison.OrdinalIgnoreCase))) return null;
         HiringPolicyResponse policy;
         try
@@ -87,8 +101,9 @@ public sealed partial class ChiefOfStaffAgent
         }
         catch (PlatformCapabilityException exception) when (exception.Code == PlatformCapabilityErrorCode.ValidationFailed)
         {
-            var unchanged = await context.Platform.InvokeAsync<object, HiringPolicyResponse>(HiringAutonomyCapabilities.Read, new { }, token);
-            return new(await AskHiringPolicyQuestionAsync(conversationId, unchanged, context, token, turnId.ToString("N")));
+            // The platform could not bind this answer to the current authorized decision.
+            // Do not create another wizard or report a successful save from presentation text.
+            return new(null, "That hiring choice is no longer current. Your preferences were not changed.");
         }
         catch (PlatformCapabilityException) { return null; }
         if (!policy.SetupComplete) return new(await AskHiringPolicyQuestionAsync(conversationId, policy, context, token));
@@ -153,19 +168,17 @@ public sealed partial class ChiefOfStaffAgent
 
     private async Task RecoverApprovedHiringAsync(AgentRuntimeContext context, CancellationToken token)
     {
-        try
-        {
-            var plans = await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(Statuses: ["Approved"]), token);
-            foreach (var plan in plans.Requests.Take(100))
-                await ReconcileApprovedResourceChangeAsync(plan, context, token);
-            var backlog = await context.Platform.ListHiringRecommendationsAsync(token);
-            foreach (var recommendation in backlog.Recommendations.Where(x => x.FulfilledHeadcount < x.Headcount).Take(100))
-                _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
-        }
-        catch (PlatformCapabilityException exception)
-        {
-            _logger.LogInformation("Hiring recovery requires review or unavailable capabilities: {Code}", exception.Code);
-        }
+        await RunResourceChangeAsync(Guid.Empty, () => ReconcileApprovedHiringAsync(context, token), context, token);
+    }
+
+    private async Task ReconcileApprovedHiringAsync(AgentRuntimeContext context, CancellationToken token)
+    {
+        var plans = await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(Statuses: ["Approved"]), token);
+        foreach (var plan in plans.Requests.Take(100))
+            await RunResourceChangeAsync(plan.Id, () => ReconcileApprovedResourceChangeAsync(plan, context, token), context, token);
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(token);
+        foreach (var recommendation in backlog.Recommendations.Where(x => x.FulfilledHeadcount < x.Headcount).Take(100))
+            _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
     }
 
     private static async Task<bool> PrepareHiringCandidateAsync(Guid recommendationId, AgentRuntimeContext context, CancellationToken token)
