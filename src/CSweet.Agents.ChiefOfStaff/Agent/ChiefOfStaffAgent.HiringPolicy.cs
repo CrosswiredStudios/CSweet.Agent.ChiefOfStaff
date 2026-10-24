@@ -168,20 +168,17 @@ public sealed partial class ChiefOfStaffAgent
 
     private async Task RecoverApprovedHiringAsync(AgentRuntimeContext context, CancellationToken token)
     {
-        try
-        {
-            var plans = await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(Statuses: ["Approved"]), token);
-            foreach (var plan in plans.Requests.Take(100))
-                await RunResourceChangeAsync(plan.Id, () => ReconcileApprovedResourceChangeAsync(plan, context, token), context, token);
-            var backlog = await context.Platform.ListHiringRecommendationsAsync(token);
-            foreach (var recommendation in backlog.Recommendations.Where(x => x.FulfilledHeadcount < x.Headcount).Take(100))
-                _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
-        }
-        catch (PlatformCapabilityException exception) when (exception.Code is PlatformCapabilityErrorCode.Denied or
-            PlatformCapabilityErrorCode.NotFound or PlatformCapabilityErrorCode.ApprovalRequired or PlatformCapabilityErrorCode.BudgetExceeded)
-        {
-            _logger.LogInformation("Hiring recovery requires review or unavailable capabilities: {Code}", exception.Code);
-        }
+        await RunResourceChangeAsync(Guid.Empty, () => ReconcileApprovedHiringAsync(context, token), context, token);
+    }
+
+    private async Task ReconcileApprovedHiringAsync(AgentRuntimeContext context, CancellationToken token)
+    {
+        var plans = await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(Statuses: ["Approved"]), token);
+        foreach (var plan in plans.Requests.Take(100))
+            await RunResourceChangeAsync(plan.Id, () => ReconcileApprovedResourceChangeAsync(plan, context, token), context, token);
+        var backlog = await context.Platform.ListHiringRecommendationsAsync(token);
+        foreach (var recommendation in backlog.Recommendations.Where(x => x.FulfilledHeadcount < x.Headcount).Take(100))
+            _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
     }
 
     private static async Task<bool> PrepareHiringCandidateAsync(Guid recommendationId, AgentRuntimeContext context, CancellationToken token)

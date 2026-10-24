@@ -85,7 +85,7 @@ public sealed partial class ChiefOfStaffAgent
         var directory = await context.Platform.PersonalTodo.ListAsync(token);
         if (!directory.Boards.SelectMany(x => x.Items).Any(x => x.CorrelationId == key && x.ArchivedAt is null &&
             x.Status is not (PersonalTodoStatuses.Completed or PersonalTodoStatuses.Cancelled)))
-            await context.Platform.PersonalTodo.AddAsync(new("Review blocked resource-change follow-through", reason,
+            await context.Platform.PersonalTodo.AddAsync(new(requestId == Guid.Empty ? "Review blocked hiring discovery" : "Review blocked resource-change follow-through", reason,
                 WorkPriorities.High, null, $"{key}:card:{stored!.Revision}", CorrelationId: key), token);
         _logger.LogWarning("Resource request {RequestId} requires review: {Code}.", requestId, code);
     }
@@ -96,6 +96,13 @@ public sealed partial class ChiefOfStaffAgent
             return PersonalTodoResult.Blocked("The resource-review correlation is invalid.");
         var succeeded = await RunResourceChangeAsync(requestId, async () =>
         {
+            // The zero identity is reserved for bounded discovery, not a domain request.
+            // A missing read grant must become actionable work even before IDs are known.
+            if (requestId == Guid.Empty)
+            {
+                await ReconcileApprovedHiringAsync(context, token);
+                return;
+            }
             var read = await context.Platform.ReadResourceChangesAsync(new ResourceChangeReadRequest(requestId), token);
             var request = read.Requests.SingleOrDefault(x => x.Id == requestId);
             if (request is null) throw new ChiefWorkBlockedException("chief.resource_change_missing", "The resource change is unavailable. Review its visibility before retrying this task.");

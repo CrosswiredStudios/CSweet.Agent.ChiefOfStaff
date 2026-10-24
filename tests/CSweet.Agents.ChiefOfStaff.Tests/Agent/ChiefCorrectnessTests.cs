@@ -221,6 +221,26 @@ public sealed class ChiefCorrectnessTests
         Assert.Empty(h.States); Assert.Empty(h.ReviewCards);
     }
 
+    [Fact]
+    public async Task DeniedHiringDiscoveryCreatesAReviewBeforeAnyRequestIdentityIsKnown()
+    {
+        var h = new Harness();
+        h.Runtime.RegisterCapability<JsonElement, IReadOnlyList<ProjectIntakeSummary>>(ProjectIntakeCapabilities.AssistanceList,
+            (_, _) => Task.FromResult<IReadOnlyList<ProjectIntakeSummary>>([]));
+        h.Runtime.RegisterCapability<ResourceChangeReadRequest, ResourceChangeReadResponse>(PlatformCapabilities.ResourceChangeRead,
+            (_, _) => throw new PlatformCapabilityException(PlatformCapabilities.ResourceChangeRead, PlatformCapabilityErrorCode.Denied, "Access was revoked."));
+        Task Review() => h.Agent.HandleAttentionReviewAsync(new(Guid.NewGuid(), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5), "Recovered"), h.Context, default);
+        await Review(); h.Agent = h.NewAgent(); await Review();
+        Assert.Equal("Blocked", Assert.Single(h.States.Values).Status);
+        var task = Assert.Single(h.ReviewCards); Assert.Contains("discovery", task.Title);
+        Assert.Equal(0, h.Model.Calls);
+        h.Runtime.RegisterCapability<ResourceChangeReadRequest, ResourceChangeReadResponse>(PlatformCapabilities.ResourceChangeRead,
+            (_, _) => Task.FromResult(new ResourceChangeReadResponse([])));
+        Assert.Equal(PersonalTodoResult.Completed("Current resource-change follow-through is settled."),
+            await h.Agent.HandlePersonalTodoAsync(task, h.Context, default));
+        Assert.Equal("Resolved", Assert.Single(h.States.Values).Status);
+    }
+
     [Theory]
     [InlineData(false, false, true)]
     [InlineData(true, false, false)]
