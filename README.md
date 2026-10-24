@@ -70,7 +70,10 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
-Version 2.14.1-rc.2 adds durable authenticated focus, evidence-based coverage, native clarification,
+RC.3 reports the platform's current rollout/pause block when focus or leadership decisions are saved,
+instead of promising that disabled work will start. Saved choices remain available for recovery.
+
+Version 2.14.1-rc.3 adds durable authenticated focus, evidence-based coverage, native clarification,
 one unresolved proactive recommendation and restart-safe outcome tracking. General and Game Studio
 are the first assessment profiles; other profiles retain onboarding. Deploy SDK 5.4.0 and the
 companion platform migrations/hidden grants before updating through Installed Agents. Proactive

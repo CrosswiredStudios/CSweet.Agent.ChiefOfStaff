@@ -66,6 +66,66 @@ public sealed class ChiefLeadershipTests
         Assert.NotNull(captured); Assert.Equal("product", captured.ExplicitDomainId); Assert.Equal(turn, captured.OwnerTurnId);
         Assert.Equal(source, captured.MessageId); Assert.Equal(conversation, captured.ConversationId); Assert.Equal(0, model.Calls);
         Assert.Contains(runtime.Progress, x => x.GetProperty("isFinal").GetBoolean());
+        Assert.Contains(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains("Leadership assessment cannot start", StringComparison.Ordinal));
+        Assert.DoesNotContain(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains("I’ll assess", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false, false, null, "Leadership assessment cannot start")]
+    [InlineData(true, true, null, "Proactive leadership is paused")]
+    [InlineData(true, false, "This profile requires its own proactive acceptance fixtures.", "Leadership assessment cannot start")]
+    [InlineData(true, false, null, "I’ll assess the matching leadership responsibility")]
+    public async Task FocusAnswerReportsThePostCaptureExecutionState(bool enabled, bool paused, string? block, string expected)
+    {
+        var before = State() with { AnsweredDecisionId = Guid.NewGuid() };
+        var after = before with { ProactiveEnabled = enabled, Paused = paused, ConfigurationBlock = block,
+            NextAssessmentId = enabled && !paused && block is null ? before.NextAssessmentId : null };
+        var model = new Model("must not run"); var captures = 0;
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<ReadChiefLeadershipRequest, ChiefLeadershipSnapshot>(ChiefLeadershipCapabilities.Read, (_, _) => Task.FromResult(captures == 0 ? before : after))
+            .RegisterCapability<CaptureChiefFocusRequest, ChiefLeadershipSnapshot>(ChiefLeadershipCapabilities.Capture, (_, _) =>
+            { captures++; return Task.FromResult(before); }); // Historic idempotency receipt is not current execution state.
+        await DeliverLeadershipInputAsync(runtime, model, "Decision: Where should we focus?\nAnswer: Product");
+        Assert.Equal(1, captures); Assert.Equal(0, model.Calls);
+        Assert.Contains(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains(expected, StringComparison.Ordinal));
+        if (!enabled || paused || block is not null)
+            Assert.DoesNotContain(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains("I’ll assess", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReplayedFocusAnswerStillExplainsThePlatformBlockWithoutRecapturing()
+    {
+        var state = State();
+        state = state with { AnsweredDecisionId = state.Focus!.SourceDecisionId, ProactiveEnabled = false,
+            NextAssessmentId = null, ConfigurationBlock = "Proactive leadership is paused by the platform rollout control." };
+        var model = new Model("must not run");
+        var runtime = new AgentTestRuntime().RegisterCapability<ReadChiefLeadershipRequest, ChiefLeadershipSnapshot>(
+            ChiefLeadershipCapabilities.Read, (_, _) => Task.FromResult(state));
+        await DeliverLeadershipInputAsync(runtime, model, "Decision: Where should we focus?\nAnswer: Product");
+        Assert.Equal(0, model.Calls);
+        Assert.Contains(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains(state.ConfigurationBlock, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OwnerResumeDoesNotClaimExecutionWhenThePlatformGateRemainsDisabled()
+    {
+        var state = State() with { Paused = true };
+        var runtime = new AgentTestRuntime()
+            .RegisterCapability<ReadChiefLeadershipRequest, ChiefLeadershipSnapshot>(ChiefLeadershipCapabilities.Read, (_, _) => Task.FromResult(state))
+            .RegisterCapability<ControlChiefLeadershipRequest, ChiefLeadershipSnapshot>(ChiefLeadershipCapabilities.Control, (_, _) =>
+            { state = state with { Paused = false, ProactiveEnabled = false, NextAssessmentId = null }; return Task.FromResult(state); });
+        await DeliverLeadershipInputAsync(runtime, new Model("must not run"), "Resume proactive leadership");
+        Assert.Contains(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains("Leadership assessment cannot start", StringComparison.Ordinal));
+    }
+
+    private static Task DeliverLeadershipInputAsync(AgentTestRuntime runtime, Model model, string text)
+    {
+        var incoming = new UserMessageReceived(Guid.NewGuid(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(),
+            text, null, Guid.NewGuid(), MessageId: Guid.NewGuid());
+        return new ChiefOfStaffAgent(model, NullLogger<ChiefOfStaffAgent>.Instance, new Orchestrator()).HandleEventAsync(
+            new(Guid.NewGuid(), Guid.NewGuid(), ChiefOfStaffProfile.UserMessageReceivedEvent,
+                JsonSerializer.SerializeToElement(incoming, new JsonSerializerOptions(JsonSerializerDefaults.Web)), DateTimeOffset.UtcNow, "focus"),
+            runtime.CreateContext(Guid.NewGuid().ToString()), default);
     }
 
     [Fact]

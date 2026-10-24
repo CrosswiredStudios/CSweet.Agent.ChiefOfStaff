@@ -38,10 +38,11 @@ public sealed partial class ChiefOfStaffAgent : IPersonalTodoClaimPolicy
         }
         if (pause || resume)
         {
-            await context.Platform.ChiefLeadership.ControlAsync(new(incoming.TurnId, pause, state.FocusRevision,
+            state = await context.Platform.ChiefLeadership.ControlAsync(new(incoming.TurnId, pause, state.FocusRevision,
                 $"chief-control:{incoming.TurnId:N}"), token);
+            state = await context.Platform.ChiefLeadership.ReadAsync(token: token);
             await stream.CommitAsync(pause ? "New proactive leadership work is paused. Existing commitments are retained."
-                : "Proactive leadership can resume when the platform rollout control permits it. Existing commitments are retained.", token);
+                : LeadershipConfirmation(state, "Your resume request is saved."), token);
             return true;
         }
         if (state.AnsweredDecisionId is null && priority is null) return false;
@@ -56,18 +57,38 @@ public sealed partial class ChiefOfStaffAgent : IPersonalTodoClaimPolicy
             await context.Platform.ChiefLeadership.PresentAsync(new(profile.Key, 1, Guid.Parse(incoming.ConversationId), incoming.MessageId,
                 profile.FocusOptions.Select((x, index) => new ChiefCoverageDomain(x.Id, x.Label, x.Description, index + 1)).ToArray(),
                 state.FocusRevision, $"chief-initial-priority:{incoming.TurnId:N}", incoming.TurnId, priority), token);
-            await stream.CommitAsync("Your focus is saved. I’ll assess the matching leadership responsibility and track its outcome.", token);
+            state = await context.Platform.ChiefLeadership.ReadAsync(token: token);
+            await stream.CommitAsync(LeadershipConfirmation(state, "Your focus is saved."), token);
             return true;
         }
         var recovered = state.AnsweredDecisionId is { } decision && (state.Focus?.SourceDecisionId == decision ||
             state.Assessments.Any(x => x.DecisionId == decision && x.ExecutionStatus != "WaitingDecision"));
         if (!recovered)
-            await context.Platform.ChiefLeadership.CaptureAsync(new(incoming.TurnId, state.FocusRevision,
+        {
+            state = await context.Platform.ChiefLeadership.CaptureAsync(new(incoming.TurnId, state.FocusRevision,
                 $"chief-focus-answer:{incoming.TurnId:N}", state.AnsweredDecisionId, priority), token);
-        await stream.CommitAsync(priority is not null || state.Focus is null
-            ? "Your focus is saved. I’ll assess the matching leadership responsibility and track its outcome."
-            : "Your leadership decision is saved. I’ll continue from the current coverage state.", token);
+            // Idempotent command receipts may contain an older rollout configuration.
+            // Confirm continuation from current platform state, not that historic result.
+            state = await context.Platform.ChiefLeadership.ReadAsync(token: token);
+        }
+        await stream.CommitAsync(LeadershipConfirmation(state, priority is not null || state.Focus is null
+            ? "Your focus is saved." : "Your leadership decision is saved."), token);
         return true;
+    }
+
+    private static string LeadershipConfirmation(ChiefLeadershipSnapshot state, string saved)
+    {
+        if (!state.ProactiveEnabled || !string.IsNullOrWhiteSpace(state.ConfigurationBlock))
+            return saved + " Leadership assessment cannot start: " +
+                (string.IsNullOrWhiteSpace(state.ConfigurationBlock)
+                    ? "the platform has not enabled this leadership workflow."
+                    : state.ConfigurationBlock) +
+                " Your selection is retained. An administrator must enable the workflow before I can assess coverage or recommend a hire.";
+        if (state.Paused)
+            return saved + " Proactive leadership is paused. Your selection is retained; ask me to resume proactive leadership when you are ready.";
+        if (state.NextAssessmentId is not null)
+            return saved + " I’ll assess the matching leadership responsibility and track its outcome.";
+        return saved + " I’ll continue from the current coverage state, including any outstanding hiring or leadership decision.";
     }
 
     private async Task ProcessLeadershipAsync(AgentRuntimeContext context, CancellationToken token)
