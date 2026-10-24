@@ -10,8 +10,12 @@ internal sealed class HiringTurnTools
     private bool staffingChanged;
     private bool questionAsked;
 
+    public bool QuestionAsked => questionAsked;
+
     public AITool Wrap(AITool tool) => tool is AIFunction function &&
-        function.Name is "ask_user" or "upsert_hiring_recommendation" or "withdraw_hiring_recommendation"
+        function.Name is "ask_user" or "upsert_hiring_recommendation" or "withdraw_hiring_recommendation" or
+            "resolve_hiring_recommendation" or "propose_workforce_plan" or "propose_resource_change" or
+            "decide_resource_change" or "stage_hiring_workflow" or "select_hiring_candidate" or "submit_delegated_hire"
             ? new GuardedFunction(function, this) : tool;
 
     private sealed class GuardedFunction(AIFunction inner, HiringTurnTools turn) : DelegatingAIFunction(inner)

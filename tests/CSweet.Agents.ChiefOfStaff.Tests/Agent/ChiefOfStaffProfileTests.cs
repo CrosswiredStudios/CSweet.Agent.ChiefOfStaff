@@ -780,6 +780,8 @@ What type of business are you building?
         SendCommunicationMessageRequest? managerMessage = null;
         var suggestedActions = new List<SuggestUserActionRequest>();
         var runtime = new AgentTestRuntime()
+            .RegisterCapability<AgentOperatingStateReadRequest, AgentOperatingStateReadResponse>(
+                PlatformCapabilities.AgentOperatingStateRead, (_, _) => Task.FromResult(new AgentOperatingStateReadResponse(null)))
             .RegisterCapability<JsonElement, OrganizationSnapshotResponse>(
                 PlatformCapabilities.OrganizationSnapshotRead,
                 (_, _) => Task.FromResult(organization))
@@ -934,7 +936,7 @@ What type of business are you building?
     }
 
     [Fact]
-    public async Task ApprovedResourceChange_NotVisibleToChiefFailsInsteadOfSilentlyCompleting()
+    public async Task ApprovedResourceChange_WithoutDurableReviewStorageFailsInsteadOfAcknowledging()
     {
         var organizationId = Guid.NewGuid();
         var installationId = Guid.NewGuid();
@@ -961,7 +963,7 @@ What type of business are you building?
             NullLogger<ChiefOfStaffAgent>.Instance,
             new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => agent.HandleEventAsync(
+        var exception = await Assert.ThrowsAsync<PlatformCapabilityException>(() => agent.HandleEventAsync(
             new AgentEventEnvelope(
                 Guid.NewGuid(),
                 Guid.NewGuid(),
@@ -977,8 +979,7 @@ What type of business are you building?
             context,
             CancellationToken.None));
 
-        Assert.Contains(requestId.ToString("D"), exception.Message, StringComparison.Ordinal);
-        Assert.Contains("not visible", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PlatformCapabilities.AgentOperatingStateRead, exception.Capability);
     }
 
     [Fact]

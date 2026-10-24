@@ -1,12 +1,28 @@
 # Chief of Staff capability grants
 
+Version 2.14.1-rc.1 adds five model-hidden leadership grants and the durable leadership-change
+subscription. PM/recommendation delivery receipts reuse installation-scoped operating state.
+It removes the previously unhandled mention, management-status and resource-need subscriptions.
+Calendar reminders use the SDK and platform calendar/work queue. See `releases/2.14.1-rc.1.md`.
+
+| New required grant | Purpose |
+|---|---|
+| `platform.chief-leadership.read.v1` | Recover current focus and bounded assessment state |
+| `platform.chief-leadership.present-focus.v1` | Bind the native focus widget to domain options and source revision |
+| `platform.chief-leadership.capture-focus.v1` | Capture authenticated owner decisions or explicit current priorities |
+| `platform.chief-leadership.assess.v1` | Validate coverage evidence and persist linked next actions |
+| `platform.chief-leadership.control.v1` | Honor authenticated owner pause/resume instructions |
+
+`com.csweet.chief-leadership.changed.v1` is a wake hint. The Chief reads current authorized
+state before effects. These grants confer no additional hiring, spending or delegation authority.
+
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `2.7.0` and manifest protocol `2.0`.
+package version `2.14.1-rc.1` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
-`CSweet.Agent.SDK` 3.51.0; manifest-audit tests reject names missing from that catalog.
+`CSweet.Agent.SDK` 5.4.0; manifest-audit tests reject names missing from that catalog.
 
 ## How to read this catalog
 

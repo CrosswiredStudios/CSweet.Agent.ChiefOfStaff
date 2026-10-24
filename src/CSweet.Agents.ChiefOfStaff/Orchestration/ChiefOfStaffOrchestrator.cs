@@ -104,7 +104,7 @@ OWNER MESSAGE:
                 new ChatMessage(ChatRole.User, extractionPrompt)
             ], cancellationToken: cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogDebug(exception, "Explicit business-fact extraction was unavailable.");
             return;

@@ -12,6 +12,23 @@ namespace CSweet.Agents.ChiefOfStaff.Tests.Profiles;
 public sealed class OperatingProfileOnboardingTests
 {
     [Fact]
+    public async Task StaleHiringAnswerDoesNotReopenWizardOrClaimASave()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 1, new(), true, SetupStage: "complete");
+        var harness = new Harness(Assessment(true, "general", 0.95), hiringPolicy: policy);
+        harness.Runtime.RegisterCapability<CaptureHiringPolicyDecisionRequest, HiringPolicyResponse>(HiringAutonomyCapabilities.CaptureDecision,
+            (_, _) => throw new PlatformCapabilityException(HiringAutonomyCapabilities.CaptureDecision,
+                PlatformCapabilityErrorCode.ValidationFailed, "Stale decision"));
+        await harness.AnswerHiringAsync("Decision: How should I help with hiring?\nAnswer: Automatic hiring");
+        Assert.Empty(harness.Decisions);
+        Assert.Empty(harness.Messages);
+        Assert.Empty(harness.States);
+        Assert.Equal(0, harness.Model.Calls);
+        Assert.Contains(harness.Runtime.Progress, x => x.TryGetProperty("delta", out var delta) &&
+            delta.GetString() == "That hiring choice is no longer current. Your preferences were not changed.");
+    }
+
+    [Fact]
     public async Task Hiring_AnsweredModeInsidePlatformPromptAdvancesToPublishers()
     {
         var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), false);
@@ -331,6 +348,19 @@ public sealed class OperatingProfileOnboardingTests
             Model = new FakeModel(response);
             Agent = NewAgent();
             var runtime = new AgentTestRuntime()
+                .RegisterCapability<ReadChiefLeadershipRequest, ChiefLeadershipSnapshot>(ChiefLeadershipCapabilities.Read,
+                    (_, _) => Task.FromResult(new ChiefLeadershipSnapshot(0, null, [], [], false, false, Guid.Empty, null, "test")))
+                .RegisterCapability<PresentChiefFocusRequest, PresentedChiefFocus>(ChiefLeadershipCapabilities.Present, (request, _) =>
+                {
+                    if (FailQuestions) throw new PlatformCapabilityException(ChiefLeadershipCapabilities.Present,
+                        PlatformCapabilityErrorCode.Unavailable, "Question service is temporarily unavailable.", retryable: true);
+                    Decisions[request.IdempotencyKey] = new(request.ConversationId, null, request.MessageId,
+                        "Where would you like the company to focus first?", request.Domains.Select(x => new RequestUserInputOption(x.Id, x.Label, x.Description)).ToArray(),
+                        request.Domains[0].Id, request.IdempotencyKey);
+                    foreach (var domain in request.Domains)
+                        Todos[$"leadership-coverage:{request.ProfileKey}:{domain.Id}:personal-todo"] = JsonSerializer.SerializeToElement(new { domain.Id });
+                    return Task.FromResult(new PresentedChiefFocus(Guid.NewGuid(), request.MessageId, 0));
+                })
                 .RegisterCapability<AgentOperatingStateReadRequest, AgentOperatingStateReadResponse>(PlatformCapabilities.AgentOperatingStateRead,
                     (request, _) => Task.FromResult(new AgentOperatingStateReadResponse(States.GetValueOrDefault(request.StateKey))))
                 .RegisterCapability<AgentOperatingStateWriteRequest, AgentOperatingStateResponse>(PlatformCapabilities.AgentOperatingStateWrite, (request, _) =>

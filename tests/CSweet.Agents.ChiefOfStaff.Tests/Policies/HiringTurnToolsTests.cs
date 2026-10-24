@@ -6,14 +6,24 @@ namespace CSweet.Agents.ChiefOfStaff.Tests.Policies;
 public sealed class HiringTurnToolsTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task QuestionAndStaffingChangeCannotBothPersistInOneTurn(bool questionFirst)
+    [InlineData(false, "upsert_hiring_recommendation")]
+    [InlineData(true, "upsert_hiring_recommendation")]
+    [InlineData(false, "withdraw_hiring_recommendation")]
+    [InlineData(true, "withdraw_hiring_recommendation")]
+    [InlineData(false, "propose_workforce_plan")]
+    [InlineData(true, "propose_workforce_plan")]
+    [InlineData(false, "propose_resource_change")]
+    [InlineData(true, "propose_resource_change")]
+    [InlineData(false, "decide_resource_change")]
+    [InlineData(true, "decide_resource_change")]
+    [InlineData(false, "stage_hiring_workflow")]
+    [InlineData(true, "stage_hiring_workflow")]
+    public async Task QuestionAndStaffingChangeCannotBothPersistInOneTurn(bool questionFirst, string toolName)
     {
         var questions = 0; var hires = 0;
         var guard = new HiringTurnTools();
         var question = (AIFunction)guard.Wrap(AIFunctionFactory.Create(() => ++questions, "ask_user"));
-        var hire = (AIFunction)guard.Wrap(AIFunctionFactory.Create(() => ++hires, "upsert_hiring_recommendation"));
+        var hire = (AIFunction)guard.Wrap(AIFunctionFactory.Create(() => ++hires, toolName));
         await (questionFirst ? question : hire).InvokeAsync(new());
         await (questionFirst ? hire : question).InvokeAsync(new());
         if (questionFirst) await question.InvokeAsync(new());

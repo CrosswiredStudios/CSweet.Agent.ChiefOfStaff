@@ -14,7 +14,7 @@
   },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.13.5",
+  "version": "2.14.1-rc.1",
   "publisher": {
     "id": "com.csweet",
     "name": "C-Sweet"
@@ -160,6 +160,11 @@
     }
   ],
   "requires": [
+    { "name": "platform.chief-leadership.read.v1", "scope": "organization", "purpose": "Recover current platform-owned focus and coverage records.", "modelVisible": false },
+    { "name": "platform.chief-leadership.present-focus.v1", "scope": "organization", "purpose": "Present an authenticated focus decision with a stable source revision.", "modelVisible": false },
+    { "name": "platform.chief-leadership.capture-focus.v1", "scope": "organization", "purpose": "Capture immutable owner focus and coverage decisions.", "modelVisible": false },
+    { "name": "platform.chief-leadership.assess.v1", "scope": "organization", "purpose": "Retain validated coverage evidence and track its outcome.", "modelVisible": false },
+    { "name": "platform.chief-leadership.control.v1", "scope": "organization", "purpose": "Honor explicit owner pause and resume instructions.", "modelVisible": false },
     {
       "name": "platform.project-health.read.v1",
       "scope": "organization",
@@ -556,18 +561,16 @@
   ],
   "events": {
     "subscribes": [
+      "com.csweet.chief-leadership.changed.v1",
       "com.csweet.calendar.reminder-due.v1",
       "com.csweet.agent.configuration-choice.answered.v1",
       "com.csweet.work.personal-todo.available.v1",
-      "com.csweet.communication.message.mentioned.v1",
       "com.csweet.agent.onboarded.v1",
       "com.csweet.user.message.received.v1",
       "com.csweet.action.completed.v1",
       "com.csweet.action.rejected.v1",
       "com.csweet.approval.completed.v1",
       "com.csweet.management.review.due.v1",
-      "com.csweet.management.status.reported.v1",
-      "com.csweet.management.resource-need.reported.v1",
       "com.csweet.management.resource-change.requested.v1",
       "com.csweet.management.resource-change.decided.v1",
       "com.csweet.workstream.changed.v1",
