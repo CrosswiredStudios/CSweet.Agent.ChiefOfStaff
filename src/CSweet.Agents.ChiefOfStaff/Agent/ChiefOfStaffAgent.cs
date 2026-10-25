@@ -990,11 +990,11 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                 BusinessOperatingProfiles.Resolve(Settings).Key,
                 "game-studio",
                 StringComparison.Ordinal) &&
-            GameStudioOwnershipPolicy.IsCreativeDirectorRole(fulfilled.RoleKey, fulfilled.RoleTitle))
+            GameStudioOwnershipPolicy.IsGameDirectorRole(fulfilled.RoleKey, fulfilled.RoleTitle))
         {
             await WithdrawConflictingChiefProductManagerRecommendationsAsync(
                 fulfilled.WorkstreamId,
-                $"creative-director-fulfilled:{message.EventId:N}",
+                $"game-director-fulfilled:{message.EventId:N}",
                 context,
                 cancellationToken);
         }
@@ -1053,10 +1053,10 @@ impossible, or denied. Otherwise perform the task and return a concise completio
         string response,
         GameProducerOwnershipDecision decision) => decision switch
         {
-            GameProducerOwnershipDecision.DelegateToCreativeDirector =>
-                "Creative direction and delivery-team design for this game are delegated to your Creative Director. I will not create a CEO-direct Game Producer recommendation; the Creative Director's governed staffing plan will return to you for approval.",
+            GameProducerOwnershipDecision.DelegateToGameDirector =>
+                "Creative direction and delivery-team design for this game are delegated to your Video Game Director. I will not create a CEO-direct Game Producer recommendation; the Video Game Director's governed staffing plan will return to you for approval.",
             GameProducerOwnershipDecision.ClarifyProject =>
-                "I see multiple active game projects and cannot safely assign delivery-team ownership from the current context. Which game project does the Creative Director own?",
+                "I see multiple active game projects and cannot safely assign delivery-team ownership from the current context. Which game project does the Video Game Director own?",
             _ => response
         };
 
@@ -1094,7 +1094,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             _ = await context.Platform.WithdrawHiringRecommendationAsync(
                 new WithdrawHiringRecommendationRequest(
                     recommendation.Id,
-                    "Creative Director ownership now governs product-team design for this game project.",
+                    "Video Game Director ownership now governs product-team design for this game project.",
                     $"{idempotencyPrefix}:withdraw:{recommendation.Id:N}"),
                 cancellationToken);
         }

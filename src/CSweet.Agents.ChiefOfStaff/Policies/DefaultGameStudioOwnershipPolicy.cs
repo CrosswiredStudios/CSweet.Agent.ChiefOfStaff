@@ -15,8 +15,8 @@ public sealed class DefaultGameStudioOwnershipPolicy : IGameStudioOwnershipPolic
         Guid? requestedWorkstreamId) =>
         GameStudioOwnershipPolicy.Assess(organization, backlog, requestedWorkstreamId);
 
-    public bool IsCreativeDirectorRole(string? roleKey, string? title) =>
-        GameStudioOwnershipPolicy.IsCreativeDirectorRole(roleKey, title);
+    public bool IsGameDirectorRole(string? roleKey, string? title) =>
+        GameStudioOwnershipPolicy.IsGameDirectorRole(roleKey, title);
 
     public bool IsGameProducer(HiringRecommendationResponse recommendation) =>
         GameStudioOwnershipPolicy.IsGameProducer(recommendation);

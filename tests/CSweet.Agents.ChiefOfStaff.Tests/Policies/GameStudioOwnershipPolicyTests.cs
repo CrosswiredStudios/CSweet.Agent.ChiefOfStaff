@@ -8,14 +8,14 @@ namespace CSweet.Agents.ChiefOfStaff.Tests.Policies;
 public sealed class GameStudioOwnershipPolicyTests
 {
     [Fact]
-    public void SingleProjectCreativeDirectorSuppressesModelProductManagerRecommendation()
+    public void SingleProjectGameDirectorSuppressesModelProductManagerRecommendation()
     {
         var creativeDirectorId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
         var workstreamId = Guid.NewGuid();
         var organization = Organization(
-            [new OrganizationPerson(creativeDirectorId, "Creative Director", "Agent", roleId, null, Guid.NewGuid(), true)],
-            [new OrganizationRole(roleId, "Video Game Creative Director", "", "{}")],
+            [new OrganizationPerson(creativeDirectorId, "Video Game Director", "Agent", roleId, null, Guid.NewGuid(), true)],
+            [new OrganizationRole(roleId, "Video Game Director", "", "{}")],
             [new WorkstreamSummary(workstreamId, "First game", "Ship it", "Active", "Idea", creativeDirectorId, null, null, null)]);
 
         var decision = GameStudioOwnershipPolicy.Assess(
@@ -23,19 +23,19 @@ public sealed class GameStudioOwnershipPolicyTests
         var guarded = ChiefOfStaffAgent.EnforceGameStudioProducerOwnership(
             "Priority 1 Hire: Game Producer", decision);
 
-        Assert.Equal(GameProducerOwnershipDecision.DelegateToCreativeDirector, decision);
+        Assert.Equal(GameProducerOwnershipDecision.DelegateToGameDirector, decision);
         Assert.Contains("delegated", guarded, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Priority 1 Hire", guarded, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void MultipleUnscopedProjectsRequireExactlyOneClarification()
+    public void BusinessWideDirectorOwnsEveryProject()
     {
         var creativeDirectorId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
         var organization = Organization(
-            [new OrganizationPerson(creativeDirectorId, "Creative Director", "Agent", roleId, null, Guid.NewGuid(), true)],
-            [new OrganizationRole(roleId, "Creative Director", "", "{}")],
+            [new OrganizationPerson(creativeDirectorId, "Video Game Director", "Agent", roleId, null, Guid.NewGuid(), true)],
+            [new OrganizationRole(roleId, "Video Game Director", "", "{}")],
             [
                 new WorkstreamSummary(Guid.NewGuid(), "Game A", "Ship A", "Active", "Idea", creativeDirectorId, null, null, null),
                 new WorkstreamSummary(Guid.NewGuid(), "Game B", "Ship B", "Active", "Idea", null, null, null, null)
@@ -46,8 +46,8 @@ public sealed class GameStudioOwnershipPolicyTests
         var guarded = ChiefOfStaffAgent.EnforceGameStudioProducerOwnership(
             "Hire a Game Producer.", decision);
 
-        Assert.Equal(GameProducerOwnershipDecision.ClarifyProject, decision);
-        Assert.Equal(1, guarded.Count(x => x == '?'));
+        Assert.Equal(GameProducerOwnershipDecision.DelegateToGameDirector, decision);
+        Assert.DoesNotContain("?", guarded);
     }
 
     [Fact]
@@ -72,23 +72,23 @@ public sealed class GameStudioOwnershipPolicyTests
     }
 
     [Fact]
-    public void PendingCreativeDirectorSuppressesSameProjectProductManager()
+    public void PendingGameDirectorSuppressesSameProjectProductManager()
     {
         var workstreamId = Guid.NewGuid();
-        var pendingCreativeDirector = new HiringRecommendationResponse(
-            Guid.NewGuid(), workstreamId, "Video Game Creative Director", "Own the vision.", "Suggested",
+        var pendingGameDirector = new HiringRecommendationResponse(
+            Guid.NewGuid(), workstreamId, "Video Game Director", "Own the vision.", "Suggested",
             null, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
         {
-            RoleKey = "creative-director"
+            RoleKey = "game-director"
         };
 
         var decision = GameStudioOwnershipPolicy.Assess(
             Organization([], [], [new WorkstreamSummary(
                 workstreamId, "Game", "Ship it", "Active", "Idea", null, null, null, null)]),
-            new HiringBacklogResponse([pendingCreativeDirector]),
+            new HiringBacklogResponse([pendingGameDirector]),
             workstreamId);
 
-        Assert.Equal(GameProducerOwnershipDecision.DelegateToCreativeDirector, decision);
+        Assert.Equal(GameProducerOwnershipDecision.DelegateToGameDirector, decision);
     }
 
     private static OrganizationSnapshotResponse Organization(

@@ -14,7 +14,7 @@ public interface IGameStudioOwnershipPolicy
         HiringBacklogResponse? backlog,
         Guid? requestedWorkstreamId);
 
-    bool IsCreativeDirectorRole(string? roleKey, string? title);
+    bool IsGameDirectorRole(string? roleKey, string? title);
 
     bool IsGameProducer(HiringRecommendationResponse recommendation);
 

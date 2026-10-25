@@ -27,7 +27,7 @@ public static class BusinessOperatingProfiles
                 ("research", "Research", "Reduce a major market, customer, scientific, or strategic uncertainty."),
                 ("financial", "Financial", "Establish financial controls, runway, targets, and financial leadership coverage."),
                 ("legal", "Legal", "Establish legal, regulatory, intellectual-property, and compliance ownership.")),
-            Profile("game-studio", "Game Studio", "The Creative Director owns each game's creative/product authority and initial team design. The Game Producer owns delivery, reports to that Creative Director, and is proposed through the Creative Director's approved plan. The Chief owns CEO-direct leadership gaps, company-wide constraints, approval routing, and backlog administration; once creative ownership is pending or active, do not design that project's subordinate team.",
+            Profile("game-studio", "Game Studio", "Always recommend a Video Game Director (game-director) as the first proactive hire, regardless of focus; honor explicit CEO hiring overrides. One Director reports to the CEO and owns the entire game portfolio, approved pitches and staffing plans. A shared Creative Director and shared Game Producer both report to the Director. The Chief sources approved roles and does not design the subordinate team.",
                 ("creative-product", "Creative & Product", "Clarify who owns the creative vision and who owns player and product outcomes."),
                 ("research", "Player & Market Research", "Reduce uncertainty about the audience, genre, market, or player needs."),
                 ("financial", "Financial", "Establish funding, runway, budget, and financial leadership coverage."),

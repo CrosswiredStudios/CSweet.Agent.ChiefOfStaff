@@ -187,6 +187,19 @@ public sealed class ChiefLeadershipTests
             state.Assessments[0], state, new(null, null, null, null, null, null, []), cancellation.Token));
     }
 
+    [Fact]
+    public async Task Game_studio_first_hire_is_the_shared_director_even_when_focus_is_elsewhere()
+    {
+        var state = State();
+        var assessment = state.Assessments[0] with { ProfileKey = "game-studio", DomainId = "creative-product" };
+        var model = new Model("must not run");
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, assessment, state,
+            new(null, null, null, null, null, null, []), default, "game-studio");
+        Assert.Equal("Hire", result.NextAction);
+        Assert.Equal("game-director", result.RoleKey);
+        Assert.Equal(0, model.Calls);
+    }
+
     private static ChiefLeadershipSnapshot State()
     {
         var row = new ChiefCoverageAssessment(Guid.NewGuid(), "general", 1, "product", "Product", "Product ownership", 1,

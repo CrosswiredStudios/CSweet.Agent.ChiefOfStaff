@@ -6,7 +6,7 @@ namespace CSweet.Agents.ChiefOfStaff.Policies;
 public enum GameProducerOwnershipDecision
 {
     Allow,
-    DelegateToCreativeDirector,
+    DelegateToGameDirector,
     ClarifyProject
 }
 
@@ -17,51 +17,21 @@ public static class GameStudioOwnershipPolicy
         HiringBacklogResponse? backlog,
         Guid? requestedWorkstreamId)
     {
-        var activeWorkstreams = organization?.Workstreams
-            .Where(IsActiveWorkstream)
-            .ToList() ?? [];
-        var creativeDirectorIds = ActiveCreativeDirectorIds(organization);
-        var creativeOwnedWorkstreamIds = activeWorkstreams
-            .Where(x => x.AccountableManagerOrganizationUserId is { } managerId &&
-                        creativeDirectorIds.Contains(managerId))
-            .Select(x => x.Id)
-            .ToHashSet();
-        var pendingCreativeDirectorScopes = backlog?.Recommendations
-            .Where(IsPendingCreativeDirectorRecommendation)
-            .Select(x => x.WorkstreamId)
-            .ToList() ?? [];
-        var hasCreativeOwnership = creativeDirectorIds.Count > 0 || pendingCreativeDirectorScopes.Count > 0;
-        if (!hasCreativeOwnership)
-            return GameProducerOwnershipDecision.Allow;
-
-        if (requestedWorkstreamId is { } workstreamId)
-        {
-            if (creativeOwnedWorkstreamIds.Contains(workstreamId) ||
-                pendingCreativeDirectorScopes.Contains(workstreamId))
-                return GameProducerOwnershipDecision.DelegateToCreativeDirector;
-
-            // A single early-stage game is the default scope for an unscoped Creative Director.
-            if (activeWorkstreams.Count <= 1 &&
-                (creativeDirectorIds.Count > 0 || pendingCreativeDirectorScopes.Contains(null)))
-                return GameProducerOwnershipDecision.DelegateToCreativeDirector;
-
-            return GameProducerOwnershipDecision.Allow;
-        }
-
-        return activeWorkstreams.Count > 1
-            ? GameProducerOwnershipDecision.ClarifyProject
-            : GameProducerOwnershipDecision.DelegateToCreativeDirector;
+        // The Director owns the whole business portfolio, regardless of project count.
+        return ActiveGameDirectorIds(organization).Count > 0 ||
+               backlog?.Recommendations.Any(IsPendingGameDirectorRecommendation) == true
+            ? GameProducerOwnershipDecision.DelegateToGameDirector
+            : GameProducerOwnershipDecision.Allow;
     }
 
     private static readonly ResponsePolicyFormatter Formatter = new();
 
-    internal static bool IsCreativeDirectorRole(string? roleKey, string? title)
+    internal static bool IsGameDirectorRole(string? roleKey, string? title)
     {
         var normalizedKey = Formatter.NormalizeRoleIdentity(roleKey ?? string.Empty);
         var normalizedTitle = Formatter.NormalizeRoleIdentity(title ?? string.Empty);
-        return normalizedKey is "creativedirector" or "gamedirector" or "videogamecreativedirector" ||
-               normalizedTitle.Contains("creativedirector", StringComparison.Ordinal) ||
-               normalizedTitle.Contains("gamedirector", StringComparison.Ordinal);
+        return normalizedKey is "gamedirector" or "videogamedirector" ||
+               normalizedTitle is "gamedirector" or "videogamedirector";
     }
 
     internal static bool IsGameProducer(HiringRecommendationResponse recommendation) =>
@@ -87,7 +57,7 @@ public static class GameStudioOwnershipPolicy
             return recommendation.WorkstreamId is null ||
                    organization?.Workstreams.Any(x => x.Id == recommendation.WorkstreamId) == true;
 
-        var creativeDirectorIds = ActiveCreativeDirectorIds(organization);
+        var creativeDirectorIds = ActiveGameDirectorIds(organization);
         return recommendation.WorkstreamId is { } recommendationScope &&
                organization?.Workstreams.Any(x =>
                    x.Id == recommendationScope &&
@@ -95,26 +65,26 @@ public static class GameStudioOwnershipPolicy
                    creativeDirectorIds.Contains(managerId)) == true;
     }
 
-    private static HashSet<Guid> ActiveCreativeDirectorIds(OrganizationSnapshotResponse? organization)
+    private static HashSet<Guid> ActiveGameDirectorIds(OrganizationSnapshotResponse? organization)
     {
         if (organization is null) return [];
         var roleIds = organization.Roles
-            .Where(x => IsCreativeDirectorRole(null, x.Name))
+            .Where(x => IsGameDirectorRole(null, x.Name))
             .Select(x => x.Id)
             .ToHashSet();
         return organization.People
             .Where(x => x.IsActive &&
                         ((x.RoleId is { } roleId && roleIds.Contains(roleId)) ||
-                         IsCreativeDirectorRole(null, x.DisplayName)))
+                         IsGameDirectorRole(null, x.DisplayName)))
             .Select(x => x.Id)
             .ToHashSet();
     }
 
-    private static bool IsPendingCreativeDirectorRecommendation(HiringRecommendationResponse recommendation) =>
+    private static bool IsPendingGameDirectorRecommendation(HiringRecommendationResponse recommendation) =>
         recommendation.SourceResourceChangeRequestId is null &&
         !string.Equals(recommendation.Status, "Fulfilled", StringComparison.OrdinalIgnoreCase) &&
         !string.Equals(recommendation.Status, "Withdrawn", StringComparison.OrdinalIgnoreCase) &&
-        IsCreativeDirectorRole(recommendation.RoleKey, recommendation.Title);
+        IsGameDirectorRole(recommendation.RoleKey, recommendation.Title);
 
     private static int ActiveWorkstreamCount(OrganizationSnapshotResponse? organization) =>
         organization?.Workstreams.Count(IsActiveWorkstream) ?? 0;
