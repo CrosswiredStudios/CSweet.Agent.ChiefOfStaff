@@ -118,6 +118,14 @@ public sealed class ChiefLeadershipTests
         Assert.Contains(runtime.Progress, x => x.GetProperty("delta").GetString()!.Contains("Leadership assessment cannot start", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void LeadershipPromptWaitsForOwnerChoiceAfterCoverageIsVerified()
+    {
+        Assert.Contains("next-focus card", ChiefOfStaffProfile.SystemPrompt);
+        Assert.Contains("Exclude covered or completed areas", ChiefOfStaffProfile.SystemPrompt);
+        Assert.Contains("do not activate Research or another domain automatically", CSweet.Agents.ChiefOfStaff.Profiles.BusinessOperatingProfiles.Find("game-studio")!.PromptOverlay);
+    }
+
     private static Task DeliverLeadershipInputAsync(AgentTestRuntime runtime, Model model, string text)
     {
         var incoming = new UserMessageReceived(Guid.NewGuid(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(),
