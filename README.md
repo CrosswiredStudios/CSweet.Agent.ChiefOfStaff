@@ -70,11 +70,15 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.15.1 routes Game Studio leadership by the selected focus. Creative & Product recommends
+the Video Game Director; research, financial, and legal focus use their appropriate leadership
+assessment. Deploy the matching platform routing fix so saved selections are not overridden.
+
 The matching platform starts leadership assessment for every business and supported operating
 profile after focus selection. There is no rollout flag or business allowlist. Explicit owner
 pause/resume and existing hiring authority remain in force. Saved choices survive restarts.
 
-Version 2.15.0 adds durable authenticated focus, evidence-based coverage, native clarification,
+Version 2.15.1 adds durable authenticated focus, evidence-based coverage, native clarification,
 one unresolved proactive recommendation and restart-safe outcome tracking. Deploy SDK 5.4.0 or a
 compatible later version and the companion platform migrations/hidden grants before updating through
 Installed Agents. Normal leadership work starts without rollout configuration; an owner can pause
