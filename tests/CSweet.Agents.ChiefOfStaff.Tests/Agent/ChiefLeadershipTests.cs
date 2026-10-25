@@ -188,7 +188,7 @@ public sealed class ChiefLeadershipTests
     }
 
     [Fact]
-    public async Task Game_studio_first_hire_is_the_shared_director_even_when_focus_is_elsewhere()
+    public async Task GameStudioCreativeProductFocusRecommendsTheDirector()
     {
         var state = State();
         var assessment = state.Assessments[0] with { ProfileKey = "game-studio", DomainId = "creative-product" };
@@ -198,6 +198,48 @@ public sealed class ChiefLeadershipTests
         Assert.Equal("Hire", result.NextAction);
         Assert.Equal("game-director", result.RoleKey);
         Assert.Equal(0, model.Calls);
+    }
+
+    [Theory]
+    [InlineData("research", "research-lead")]
+    [InlineData("financial", "finance-lead")]
+    [InlineData("legal", "legal-lead")]
+    public async Task GameStudioOtherFocusUsesItsOwnLeadershipAssessment(string domain, string role)
+    {
+        var state = State();
+        var assessment = state.Assessments[0] with { ProfileKey = "game-studio", DomainId = domain };
+        state = state with { Focus = state.Focus! with { DomainId = domain }, Assessments = [assessment] };
+        var model = new Model(JsonSerializer.Serialize(new ChiefCoverageResult("NeedsCoverage", "Unresolved", null,
+            "The selected responsibility needs a qualified lead; no current assignment covers it.", "Hire", [],
+            RoleKey: role, RoleTitle: "Functional lead", RoleObjective: "Lead the selected responsibility.")));
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, assessment, state,
+            new(null, null, null, null, null, null, []), default);
+        Assert.Equal(1, model.Calls); Assert.Equal(role, result.RoleKey); Assert.Equal("Hire", result.NextAction);
+        Assert.DoesNotContain("regardless of focus", model.SystemPrompt);
+    }
+
+    [Theory]
+    [InlineData("research")]
+    [InlineData("financial")]
+    [InlineData("legal")]
+    public async Task GameStudioCannotRedirectAnotherFocusToTheDirector(string domain)
+    {
+        var state = State(); var row = state.Assessments[0] with { ProfileKey = "game-studio", DomainId = domain };
+        var model = new Model(JsonSerializer.Serialize(new ChiefCoverageResult("NeedsCoverage", "Unresolved", null,
+            "Incorrect Director-first result.", "Hire", [], RoleKey: "game-director", RoleTitle: "Video Game Director", RoleObjective: "Wrong focus.")));
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, row, state,
+            new(null, null, null, null, null, null, []), default);
+        Assert.Equal(2, model.Calls); Assert.Equal("Blocked", result.NextAction); Assert.Null(result.RoleKey);
+    }
+
+    [Fact]
+    public void GameStudioPromptsRouteTheSelectedFocusRatherThanAlwaysHiringADirector()
+    {
+        var overlay = CSweet.Agents.ChiefOfStaff.Profiles.BusinessOperatingProfiles.Find("game-studio")!.PromptOverlay;
+        Assert.Contains("selected focus", overlay, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("regardless of focus", overlay);
+        Assert.DoesNotContain("regardless of focus", ChiefOfStaffProfile.SystemPrompt);
+        Assert.DoesNotContain("regardless of focus", CSweet.Agents.ChiefOfStaff.Agent.ChiefOfStaffProfile.SystemPrompt);
     }
 
     private static ChiefLeadershipSnapshot State()
@@ -260,9 +302,10 @@ public sealed class ChiefLeadershipTests
     private sealed class Model(string response) : IChatClient, IAgentLlmClientFactory
     {
         public int Calls;
+        public string SystemPrompt = "";
         public Task<IChatClient> CreateChatClientAsync(AgentLlmSelection selection, CancellationToken cancellationToken = default) => Task.FromResult<IChatClient>(this);
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        { cancellationToken.ThrowIfCancellationRequested(); Calls++; return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, response))); }
+        { cancellationToken.ThrowIfCancellationRequested(); Calls++; SystemPrompt = messages.FirstOrDefault(x => x.Role == ChatRole.System)?.Text ?? ""; return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, response))); }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public object? GetService(Type serviceType, object? key = null) => null;
         public void Dispose() { }

@@ -26,14 +26,14 @@ public sealed class TargetModelLeadershipTests(ITestOutputHelper output)
             null, null, null, null, null, null, null, null, null, null);
         ChiefCoverageAssignment[] assignments = [new(owner, null, true, ["chief-executive-officer"])];
         if (scenario is "existing-product-manager" or "game-studio")
-            assignments = [.. assignments, new(assigned, Guid.NewGuid(), false, [game ? "creative-director" : "product-manager"])];
+            assignments = [.. assignments, new(assigned, Guid.NewGuid(), false, [game ? "game-director" : "product-manager"])];
         var state = new ChiefLeadershipSnapshot(1, new(Guid.NewGuid(), 1, domain, null, owner, Guid.NewGuid(),
             Guid.NewGuid(), null, DateTimeOffset.UtcNow, null), [row], assignments, true, false, Guid.NewGuid(), row.Id, "fixture");
         var facts = scenario switch
         {
             "ceo-only" => "The CEO has not accepted product accountability and has no documented product expertise or capacity. No product responsibility is assigned. Ask who will own product decisions before recommending staffing.",
             "existing-product-manager" => "The current product-manager assignment has explicit product accountability, relevant expertise and sufficient capacity for this company's current product scope. The owner approved this existing responsibility. No additional hire is needed.",
-            "game-studio" => "The current creative-director assignment explicitly owns creative and product decisions, has relevant expertise and sufficient capacity for this game. The director owns subordinate team design. No company-level Product Manager or Producer is needed.",
+            "game-studio" => "The current game-director assignment explicitly owns the game portfolio and creative/product decisions, has relevant expertise and sufficient capacity. The director owns subordinate team design. No additional company-level manager is needed.",
             _ => "The company needs jurisdiction-specific legal representation requiring a licensed human lawyer. No current employee has that license. An agent cannot provide the required professional engagement. Ask the owner about an external professional."
         };
         var operating = new ChiefOperatingContext(new(Guid.NewGuid(), "Disposable acceptance fixture", null,
@@ -58,6 +58,39 @@ public sealed class TargetModelLeadershipTests(ITestOutputHelper output)
             Assert.Null(result.AccountableOwnerId);
             Assert.Null(result.RoleKey);
         }
+    }
+
+    [TargetModelTheory]
+    [InlineData("research", "research-lead", "research-director", "chief-science-officer")]
+    [InlineData("financial", "finance-lead", "financial-controller", "chief-financial-officer")]
+    [InlineData("legal", "legal-lead", "legal-counsel", "chief-legal-officer")]
+    public async Task GameStudioSelectedFocusChoosesItsOwnLeadershipInsteadOfADirector(string domain,
+        string firstRole, string secondRole, string thirdRole)
+    {
+        var owner = Guid.NewGuid();
+        var row = new ChiefCoverageAssessment(Guid.NewGuid(), "game-studio", 1, domain, domain,
+            "Assess the selected business leadership responsibility.", 1, "Unassessed", "Ready", 1,
+            null, null, null, null, null, null, null, null, null, null);
+        var state = new ChiefLeadershipSnapshot(1, new(Guid.NewGuid(), 1, domain, null, owner, Guid.NewGuid(),
+            Guid.NewGuid(), null, DateTimeOffset.UtcNow, null), [row],
+            [new(owner, null, true, ["chief-executive-officer"])], true, false, Guid.NewGuid(), row.Id, "fixture");
+        var facts = domain switch
+        {
+            "research" => "The CEO selected Player & Market Research and confirmed a missing research leadership function. The CEO has no available research capacity and wants an agent manager to own research priorities, evidence quality and research specialists. No current assignment covers it. Game concept creation is not the current priority.",
+            "financial" => "The CEO selected Financial and confirmed a missing finance leadership function. The CEO has no available financial-management capacity and wants an agent manager to coordinate company financial reporting, cash controls and finance specialists. No current assignment covers it. Creating a game pitch is not the current priority.",
+            _ => "The CEO selected Legal & IP and confirmed a missing legal-coordination leadership function. The CEO wants an agent manager to coordinate IP records, contract tracking and work with external licensed counsel. The agent will not provide licensed legal representation or professional legal opinions. No current assignment covers coordination. Game concept creation is not the current priority."
+        };
+        var operating = new ChiefOperatingContext(new(Guid.NewGuid(), "Synthetic Game Studio", null, "Video games",
+            facts, null, "Early", [], [], null, [], null, [], [], null, "UTC", 1, 1,
+            new Dictionary<string, ProfileFieldProvenance>()), null, null, null, null, null, []);
+        using var model = new LocalTargetModel(output);
+        var timer = Stopwatch.StartNew();
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, row, state, operating, default);
+        output.WriteLine(JsonSerializer.Serialize(new { domain, elapsedMs = timer.ElapsedMilliseconds, calls = model.Calls, result }));
+        Assert.InRange(model.Calls, 1, 2);
+        Assert.Equal("Hire", result.NextAction);
+        Assert.Contains(result.RoleKey, new[] { firstRole, secondRole, thirdRole });
+        Assert.False(result.HumanRequired);
     }
 
     private sealed class TargetModelTheoryAttribute : TheoryAttribute
