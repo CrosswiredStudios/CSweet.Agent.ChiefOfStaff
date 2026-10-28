@@ -40,11 +40,15 @@ public sealed class TargetModelLeadershipTests(ITestOutputHelper output)
             game ? "Video games" : "Software", facts, null, "Early", [], [], null, [], null, [], [], null, "UTC", 1, 1,
             new Dictionary<string, ProfileFieldProvenance>()),
             null, null, null, null, null, []);
+        if (scenario is "existing-product-manager" or "game-studio")
+            operating = operating with { Organization = new OrganizationSnapshotResponse(Guid.NewGuid(), "Active",
+                assignments.Select(x => new OrganizationPerson(x.OrganizationUserId, "Fixture manager", x.Human ? "Human" : "Agent",
+                    null, null, x.InstallationId, true)).ToArray(), [], [], [], [], DateTimeOffset.UtcNow) };
         using var model = new LocalTargetModel(output);
         var timer = Stopwatch.StartNew();
         var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, row, state, operating, default);
         output.WriteLine(JsonSerializer.Serialize(new { scenario, elapsedMs = timer.ElapsedMilliseconds, calls = model.Calls, result }));
-        Assert.InRange(model.Calls, 1, 2);
+        Assert.InRange(model.Calls, scenario is "existing-product-manager" or "game-studio" ? 0 : 1, 2);
         Assert.NotEqual("Blocked", result.NextAction);
         if (scenario is "existing-product-manager" or "game-studio")
         {
