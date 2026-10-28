@@ -1,9 +1,9 @@
 # Chief of Staff capability grants
 
-Version 2.15.2 uses five model-hidden leadership grants and the durable leadership-change
+Version 2.15.3 uses five model-hidden leadership grants and the durable leadership-change
 subscription. PM/recommendation delivery receipts reuse installation-scoped operating state.
 It removes the previously unhandled mention, management-status and resource-need subscriptions.
-Calendar reminders use the SDK and platform calendar/work queue. See `releases/2.15.2.md`.
+Calendar reminders use the SDK and platform calendar/work queue. See `releases/2.15.3.md`.
 
 | New required grant | Purpose |
 |---|---|
@@ -19,7 +19,7 @@ state before effects. These grants confer no additional hiring, spending or dele
 This document is the human-readable grant catalog for the C-Sweet Chief of Staff agent.
 The source of truth for installation authorization remains
 [`csweet-plugin.json`](csweet-plugin.json). This catalog was last verified against manifest
-package version `2.15.2` and manifest protocol `2.0`.
+package version `2.15.3` and manifest protocol `2.0`.
 
 Serialized capability names are sourced from the authoritative `CapabilityCatalog` in
 `CSweet.Agent.SDK` 5.4.0; manifest-audit tests reject names missing from that catalog.

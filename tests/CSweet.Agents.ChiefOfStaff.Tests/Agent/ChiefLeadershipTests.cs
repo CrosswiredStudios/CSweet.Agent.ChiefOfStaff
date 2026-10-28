@@ -250,6 +250,94 @@ public sealed class ChiefLeadershipTests
         Assert.DoesNotContain("regardless of focus", CSweet.Agents.ChiefOfStaff.Agent.ChiefOfStaffProfile.SystemPrompt);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task ExistingDirectorChecksWorkloadAndDoesNotAskForMissingCapacityMetrics(int projectCount)
+    {
+        var (state, operating, director) = DirectorFixture(projectCount);
+        var model = new Model("must not run");
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("AdequatelyCovered", result.CoverageStatus); Assert.Equal("None", result.NextAction);
+        Assert.Equal(director, result.AccountableOwnerId); Assert.Contains(director, result.EvidenceOrganizationUserIds);
+        Assert.Contains($"{projectCount} active project assignments", result.Rationale);
+        Assert.Equal(0, model.Calls); Assert.Null(result.Question);
+    }
+
+    [Fact]
+    public async Task ExistingDirectorUsesReportedProjectConflictBeforeAskingASpecificQuestion()
+    {
+        var (state, operating, director) = DirectorFixture(1);
+        var project = operating.Organization!.Workstreams[0];
+        operating = operating with { Organization = operating.Organization with {
+            OperatingSignals = [new("Blocker", "Critical", "The approved delivery conflicts with the portfolio review.", "Workstream", project.Id)] } };
+        var model = new Model(JsonSerializer.Serialize(new ChiefCoverageResult("AtRisk", "Agent", director,
+            "The current project reports conflicting commitments.", "Question", [director],
+            Question: "Should Marcus remain accountable while the delivery conflict is resolved?")));
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("Question", result.NextAction); Assert.Equal(director, result.AccountableOwnerId);
+        Assert.Contains("workloadReview", model.UserPrompt); Assert.Contains(project.Id.ToString(), model.UserPrompt);
+        Assert.Contains("approved delivery conflicts", model.UserPrompt); Assert.Equal(1, model.Calls);
+    }
+
+    [Fact]
+    public async Task AnotherManagersConflictDoesNotMakeTheDirectorAtRisk()
+    {
+        var (state, operating, director) = DirectorFixture(1);
+        operating = operating with { Organization = operating.Organization! with {
+            OperatingSignals = [new("Blocker", "Critical", "Another team's project is blocked.", "Workstream", Guid.NewGuid())] } };
+        var model = new Model("must not run");
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("None", result.NextAction); Assert.Equal(director, result.AccountableOwnerId); Assert.Equal(0, model.Calls);
+    }
+
+    [Fact]
+    public async Task DirectorReviewsWorkManagedThroughReportsAndExcludesCompletedProjects()
+    {
+        var (state, operating, director) = DirectorFixture(1); var producer = Guid.NewGuid();
+        var organization = operating.Organization!;
+        var project = organization.Workstreams[0] with { AccountableManagerOrganizationUserId = producer, Status = "Blocked" };
+        operating = operating with { Organization = organization with {
+            People = [.. organization.People, new(producer, "Producer", "Agent", null, director, Guid.NewGuid(), true)],
+            Workstreams = [project] } };
+        var model = new Model(JsonSerializer.Serialize(new ChiefCoverageResult("AtRisk", "Agent", director,
+            "A project managed through the Producer is blocked.", "Question", [director], Question: "Who should resolve the portfolio conflict?")));
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("Question", result.NextAction); Assert.Equal(1, model.Calls);
+        Assert.Contains(project.Id.ToString(), model.UserPrompt); Assert.Contains("is blocked", model.UserPrompt);
+        operating = operating with { Organization = operating.Organization! with {
+            Workstreams = [project with { Status = "Completed" }],
+            OperatingSignals = [new("Blocker", "Critical", "Historical blocker", "Workstream", project.Id)] } };
+        var covered = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("None", covered.NextAction); Assert.Equal(1, model.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnavailableOrConflictingWorkloadEvidenceBlocksForRecoveryInsteadOfAskingTheOwner(bool inactive)
+    {
+        var (state, operating, _) = DirectorFixture(0);
+        operating = operating with { Organization = inactive ? operating.Organization! with {
+            People = operating.Organization!.People.Select(x => x with { IsActive = false }).ToArray() } : null };
+        var model = new Model("must not run");
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, operating, default);
+        Assert.Equal("Blocked", result.NextAction); Assert.Null(result.Question); Assert.Equal(0, model.Calls);
+    }
+
+    private static (ChiefLeadershipSnapshot State, ChiefOperatingContext Operating, Guid Director) DirectorFixture(int projectCount)
+    {
+        var state = State(); var director = Guid.NewGuid(); var installation = Guid.NewGuid();
+        var assessment = state.Assessments[0] with { ProfileKey = "game-studio", DomainId = "creative-product" };
+        state = state with { Assessments = [assessment], Assignments = [new(director, installation, false, ["game-director"])],
+            Focus = state.Focus! with { DomainId = "creative-product" } };
+        var projects = Enumerable.Range(0, projectCount).Select(i => new WorkstreamSummary(Guid.NewGuid(), $"Game {i}", "Deliver the game",
+            "Active", "Development", director, null, null, null)).ToArray();
+        var organization = new OrganizationSnapshotResponse(Guid.NewGuid(), "Active",
+            [new(director, "Marcus Vale", "Agent", null, null, installation, true)], [], [], projects, [], DateTimeOffset.UtcNow);
+        return (state, new(null, null, organization, null, null, null, []), director);
+    }
+
     private static ChiefLeadershipSnapshot State()
     {
         var row = new ChiefCoverageAssessment(Guid.NewGuid(), "general", 1, "product", "Product", "Product ownership", 1,
@@ -311,9 +399,10 @@ public sealed class ChiefLeadershipTests
     {
         public int Calls;
         public string SystemPrompt = "";
+        public string UserPrompt = "";
         public Task<IChatClient> CreateChatClientAsync(AgentLlmSelection selection, CancellationToken cancellationToken = default) => Task.FromResult<IChatClient>(this);
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        { cancellationToken.ThrowIfCancellationRequested(); Calls++; SystemPrompt = messages.FirstOrDefault(x => x.Role == ChatRole.System)?.Text ?? ""; return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, response))); }
+        { cancellationToken.ThrowIfCancellationRequested(); Calls++; SystemPrompt = messages.FirstOrDefault(x => x.Role == ChatRole.System)?.Text ?? ""; UserPrompt = messages.LastOrDefault(x => x.Role == ChatRole.User)?.Text ?? ""; return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, response))); }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public object? GetService(Type serviceType, object? key = null) => null;
         public void Dispose() { }

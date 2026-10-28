@@ -73,6 +73,12 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.15.3 checks current assignments, project workload and related operating signals before
+asking about leadership coverage. Ordinary assigned managers do not need a separate capacity
+attestation. Genuine conflicts retain the named employee for contextual confirmation choices in
+the matching platform. Missing workload reads block for recovery instead of asking the owner.
+See [release notes](releases/2.15.3.md); update through published releases and Installed Agents.
+
 Version 2.15.2 routes Game Studio leadership by the selected focus. Creative & Product recommends
 the Video Game Director; research, financial, and legal focus use their appropriate leadership
 assessment. Deploy the matching platform routing fix so saved selections are not overridden.
