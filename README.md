@@ -73,6 +73,10 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.15.4 preserves explanations before trailing recommendation questions and rejects profile
+extractions whose values are absent from their source quotes. These are extractive checks; semantic
+interpretation still depends on the model. See [release notes](releases/2.15.4.md).
+
 Version 2.15.3 checks current assignments, project workload and related operating signals before
 asking about leadership coverage. Ordinary assigned managers do not need a separate capacity
 attestation. Genuine conflicts retain the named employee for contextual confirmation choices in
