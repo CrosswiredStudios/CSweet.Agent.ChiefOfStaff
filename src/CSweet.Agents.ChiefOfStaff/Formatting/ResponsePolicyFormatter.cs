@@ -27,7 +27,7 @@ public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
             .ToList();
         if (lines.Count == 0) return string.Empty;
 
-        var containsRecommendation = lines.Any(IsHiringRecommendationLine);
+        var containsRecommendation = lines.SelectMany(SplitResponseSegments).Any(IsHiringRecommendationLine);
         var sections = new List<string>(lines.Count + 2);
         foreach (var line in lines)
         {
@@ -71,10 +71,7 @@ public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
             if (trimmed.Contains("Question for you", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var parts = System.Text.RegularExpressions.Regex.Split(
-                line,
-                @"(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var parts = SplitResponseSegments(line);
             var statements = parts
                 .Where(part => !part.TrimEnd().EndsWith("?", StringComparison.Ordinal))
                 .ToList();
@@ -87,7 +84,8 @@ public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
 
     public bool IsHiringRecommendationLine(string line)
     {
-        if (line.TrimEnd().EndsWith("?", StringComparison.Ordinal) ||
+        if (line.Trim().Equals("Priority 1 Hire:", StringComparison.OrdinalIgnoreCase) ||
+            line.TrimEnd().EndsWith("?", StringComparison.Ordinal) ||
             line.Contains("cannot recommend", StringComparison.OrdinalIgnoreCase) ||
             line.Contains("can't recommend", StringComparison.OrdinalIgnoreCase) ||
             line.Contains("unable to recommend", StringComparison.OrdinalIgnoreCase) ||
@@ -113,6 +111,10 @@ public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
     public IEnumerable<string> SplitResponseSegments(string value) =>
         System.Text.RegularExpressions.Regex.Split(
             value,
-            @"\n|(?<=[.!?;:])\s+(?=(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Can|Could|Would|Should|Will)\b)",
+            // Sentence boundaries do not depend on the first word of a question.
+            // A colon/semicolon also separates a trailing question, while ordinary
+            // labels such as "Priority 1 Hire: Game Producer." stay together.
+            // Keep common titles and initials inside their sentence.
+            @"\n|(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bMs\.)(?<!\bProf\.)(?<!\b[A-Z]\.)\s+|(?<=[;:])\s+(?=[^\n.!?]*\?)",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 }

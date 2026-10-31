@@ -16,6 +16,10 @@ public sealed class ChiefOfStaffOrchestrator(ILogger<ChiefOfStaffOrchestrator> l
         "name", "businessType", "industry", "description", "targetCustomers", "offerings",
         "revenueModel", "jurisdictions", "operatingStyle", "constraints", "tools", "timeZone"
     };
+    private static readonly HashSet<string> PluralFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "targetCustomers", "offerings", "jurisdictions", "constraints", "tools"
+    };
 
     public async Task<ChiefOperatingContext> AssembleContextAsync(
         AgentRuntimeContext runtimeContext,
@@ -91,7 +95,11 @@ Extract only low-risk business facts that the owner explicitly states in the mes
 Never infer. Never extract goals, mission, strategy, ownership, authority, policy, budgets, prices, revenue targets, profit targets, runway, hiring caps, or other financial facts.
 Allowed fields: {{string.Join(", ", CapturableFields)}}.
 Return JSON only in this shape: {"facts":[{"field":"businessType","value":"software","evidence":"exact words copied from the owner message"}]}.
-Use an array of strings for plural fields. Return {"facts":[]} when nothing is explicit.
+Use arrays of nonempty strings only for targetCustomers, offerings, jurisdictions, constraints, and tools; use a nonempty string for every other field.
+Copy each value (including every array item) directly from its evidence quote; do not paraphrase or normalize business categories.
+Copy a meaningful evidence quote containing at least eight letters or digits from the owner message.
+Do not extract negated statements, hypothetical plans, questions, or quoted/reported claims about someone else's business.
+Return {"facts":[]} when nothing is explicit or the field assignment is uncertain.
 
 OWNER MESSAGE:
 {{currentMessage}}
@@ -117,8 +125,8 @@ OWNER MESSAGE:
         var changes = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         foreach (var fact in envelope.Facts)
         {
-            if (!CapturableFields.Contains(fact.Field) || string.IsNullOrWhiteSpace(fact.Evidence) ||
-                !currentMessage.Contains(fact.Evidence, StringComparison.OrdinalIgnoreCase)) continue;
+            if (fact is null || string.IsNullOrWhiteSpace(fact.Field) || !CapturableFields.Contains(fact.Field) ||
+                !IsExtractiveFact(fact, currentMessage)) continue;
             changes[fact.Field] = fact.Value;
         }
         if (changes.Count == 0) return;
@@ -138,6 +146,34 @@ OWNER MESSAGE:
             logger.LogInformation("Explicit business facts were not persisted. Code {Code}: {Message}", exception.Code, exception.Message);
         }
     }
+
+    // This enforces an extractive contract, not semantic entailment. The model still
+    // decides whether the owner's words assert this field (rather than negate it,
+    // describe a hypothetical, or quote a third party). Do not treat lexical
+    // containment as complete provenance validation.
+    private static bool IsExtractiveFact(ExtractedFact fact, string currentMessage)
+    {
+        if (string.IsNullOrWhiteSpace(fact.Evidence) || fact.Evidence.Count(char.IsLetterOrDigit) < 8)
+            return false;
+        var evidence = NormalizeWhitespace(fact.Evidence);
+        if (!ContainsPhrase(NormalizeWhitespace(currentMessage), evidence)) return false;
+        if (PluralFields.Contains(fact.Field))
+            return fact.Value.ValueKind == JsonValueKind.Array && fact.Value.GetArrayLength() > 0 &&
+                fact.Value.EnumerateArray().All(item => IsExtractiveString(item, evidence));
+        return IsExtractiveString(fact.Value, evidence);
+    }
+
+    private static bool IsExtractiveString(JsonElement value, string evidence) =>
+        value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()) &&
+        ContainsPhrase(evidence, NormalizeWhitespace(value.GetString()!));
+
+    private static string NormalizeWhitespace(string value) =>
+        string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private static bool ContainsPhrase(string text, string phrase) =>
+        System.Text.RegularExpressions.Regex.IsMatch(text,
+            @"(?<![\p{L}\p{N}_])" + System.Text.RegularExpressions.Regex.Escape(phrase) + @"(?![\p{L}\p{N}_])",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public static ManagementStatusReport BuildManagementReport(ManagementCheckInRequest request, ChiefOperatingContext context)
     {
