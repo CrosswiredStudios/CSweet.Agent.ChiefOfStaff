@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace CSweet.Agents.ChiefOfStaff.Formatting;
 
 /// <summary>
@@ -6,6 +8,17 @@ namespace CSweet.Agents.ChiefOfStaff.Formatting;
 /// </summary>
 public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
 {
+    private static readonly Regex SegmentBoundary = new(
+        @"\n|(?<=[.!?;:])\s+",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex TrailingQuestion = new(@"^[^\n.!?]*\?", RegexOptions.CultureInvariant);
+    private static readonly Regex AbbreviationEnding = new(
+        @"\b(?:Dr|Mr|Mrs|Ms|Prof|Inc|Ltd|Corp|Co|Dept|Jr|Sr|St|vs|etc|e\.g|i\.e)\.$|\b\p{L}\.$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex QuestionOpening = new(
+        @"^\s*(?:Who|What|When|Where|Why|How|Which|Do|Does|Did|Is|Are|Was|Were|Can|Could|Would|Should|Will|May|Might|Have|Has|Had|Sound|Okay|Any|Shall|Want|Ready)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     public string NormalizeRoleIdentity(string value)
     {
         var cleaned = value.Trim();
@@ -108,13 +121,32 @@ public sealed class ResponsePolicyFormatter : IResponsePolicyFormatter
             line.Contains("browse marketplace", StringComparison.OrdinalIgnoreCase);
     }
 
-    public IEnumerable<string> SplitResponseSegments(string value) =>
-        System.Text.RegularExpressions.Regex.Split(
-            value,
-            // Sentence boundaries do not depend on the first word of a question.
-            // A colon/semicolon also separates a trailing question, while ordinary
-            // labels such as "Priority 1 Hire: Game Producer." stay together.
-            // Keep common titles and initials inside their sentence.
-            @"\n|(?<=[.!?])(?<!\bDr\.)(?<!\bMr\.)(?<!\bMrs\.)(?<!\bMs\.)(?<!\bProf\.)(?<!\b[A-Z]\.)\s+|(?<=[;:])\s+(?=[^\n.!?]*\?)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    public IEnumerable<string> SplitResponseSegments(string value)
+    {
+        var start = 0;
+        foreach (Match boundary in SegmentBoundary.Matches(value))
+        {
+            var preceding = value[start..boundary.Index];
+            var following = value[(boundary.Index + boundary.Length)..];
+            // Keep role labels and ordinary clauses together. A question opening
+            // can contain abbreviation periods before its final question mark.
+            if (!boundary.Value.Contains('\n') && boundary.Index > 0 && value[boundary.Index - 1] is ';' or ':' &&
+                !QuestionOpening.IsMatch(following) && !TrailingQuestion.IsMatch(following))
+                continue;
+            // Most punctuation boundaries are independent of a question's first
+            // word. A period in "Can Acme Inc. provide one?" is different: keep
+            // the abbreviation inside that sentence so no question fragment leaks.
+            // Abbreviations/initials can also end statements ("Project X. Sound
+            // good?"). A new question after a statement takes precedence over
+            // the abbreviation exception. These are bounded English heuristics,
+            // not a general-purpose natural-language sentence parser.
+            if (!boundary.Value.Contains('\n') && AbbreviationEnding.IsMatch(preceding) &&
+                (QuestionOpening.IsMatch(preceding) || !QuestionOpening.IsMatch(following)))
+                continue;
+
+            yield return preceding;
+            start = boundary.Index + boundary.Length;
+        }
+        yield return value[start..];
+    }
 }

@@ -66,6 +66,54 @@ public sealed class ReportedBugRegressionTests
     }
 
     [Theory]
+    [InlineData("Can Acme Inc. provide one?")]
+    [InlineData("Would Acme Ltd. provide one?")]
+    [InlineData("Should the dept. lead own delivery?")]
+    [InlineData("Could Acme Inc. or Acme Ltd. provide one?")]
+    [InlineData("Can Dr. A. Smith help the dept. lead?")]
+    public void AbbreviationsInsideQuestionsDoNotLeaveQuestionFragments(string question)
+    {
+        var formatter = new ResponsePolicyFormatter();
+        var response = $"I recommend a Producer. {question} The budget remains capped.";
+        Assert.Equal("I recommend a Producer. The budget remains capped.", formatter.EnforceResponseMode(response));
+        Assert.DoesNotContain(question, formatter.FormatOnboardingMessage(response));
+    }
+
+    [Theory]
+    [InlineData("The Producer owns Project X.")]
+    [InlineData("The Producer coordinates Acme Inc.")]
+    [InlineData("The Producer coordinates Acme Ltd.")]
+    [InlineData("The Producer owns the delivery dept.")]
+    public void TerminalAbbreviationsAndProjectLabelsPreserveExplanations(string explanation)
+    {
+        var formatter = new ResponsePolicyFormatter();
+        var response = $"I recommend a Producer. {explanation} Sound good?";
+        Assert.Equal($"I recommend a Producer. {explanation}", formatter.EnforceResponseMode(response));
+        Assert.Contains(explanation, formatter.FormatOnboardingMessage(response));
+    }
+
+    [Theory]
+    [InlineData("Can Acme Inc. provide one?")]
+    [InlineData("Should the dept. lead own Project X?")]
+    public void AbbreviatedClarificationWithoutRecommendationIsPreserved(string question) =>
+        Assert.Equal(question, new ResponsePolicyFormatter().EnforceResponseMode(question));
+
+    [Theory]
+    [InlineData(". ", "Can Acme Inc. provide one?")]
+    [InlineData("; ", "Would Acme Ltd. provide one?")]
+    [InlineData(": ", "Should the dept. lead own delivery?")]
+    public void AbbreviatedQuestionIsRemovedAfterSentenceOrClauseBoundary(string separator, string question) =>
+        Assert.Equal($"I recommend a Producer{separator.TrimEnd()}",
+            new ResponsePolicyFormatter().EnforceResponseMode($"I recommend a Producer{separator}{question}"));
+
+    [Fact]
+    public void InitialsWithinAnExplanationSurviveBeforeATrailingQuestion()
+    {
+        const string statements = "I recommend a Producer. Dr. A. Smith owns delivery with Acme Inc.";
+        Assert.Equal(statements, new ResponsePolicyFormatter().EnforceResponseMode($"{statements} Sound good?"));
+    }
+
+    [Theory]
     [InlineData("targetCustomers", "[\"parents of young children\"]", "cozy farming game")]
     [InlineData("businessType", "\"consultancy\"", "a")]
     [InlineData("businessType", "\"studio\"", "we")]
