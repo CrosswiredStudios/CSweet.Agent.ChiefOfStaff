@@ -89,6 +89,7 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
     protected override async Task HandleManagerAttentionReviewAsync(
         AgentAttentionReviewContext review, AgentRuntimeContext context, CancellationToken cancellationToken)
     {
+        await ResumeImportedProjectsAsync(context, cancellationToken);
         await ResumeProjectAssistanceAsync(context, cancellationToken);
         await RecoverApprovedHiringAsync(context, cancellationToken);
         await SyncHiringPersonalTodosAsync(context, null, null, cancellationToken);
@@ -175,6 +176,11 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
                 return;
         }
 
+        if (message.EventType == "com.csweet.workstream.changed.v1")
+        {
+            await ResumeImportedProjectsAsync(context, cancellationToken);
+            return;
+        }
         if (message.EventType == ConfigurationChoiceAnsweredEvent)
         {
             await HandleConfigurationChoiceAnsweredAsync(message, context, cancellationToken);
@@ -855,11 +861,13 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             if (requestedHeadcount <= 0)
                 continue;
 
+            var importedManager = stableRoleKey == "game-producer" && requestedHeadcount == 1 && request.WorkstreamId is { } importedProject &&
+                organization.Workstreams.Any(x => x.Id == importedProject && x.Status == "Proposed" && x.AccountableManagerOrganizationUserId is null && x.ImportedProject is { ProfileStatus: "Accepted", Category: "VideoGame" });
             var recommendation = await context.Platform.UpsertHiringRecommendationAsync(
                 new UpsertHiringRecommendationRequest(
                     delta.Role.Title,
                     delta.Role.Purpose,
-                    null,
+                    importedManager ? request.WorkstreamId : null,
                     [],
                     null,
                     $"resource-change:{request.Id:N}:role:{NormalizeKey(delta.Role.RoleKey)}")
@@ -868,7 +876,8 @@ impossible, or denied. Otherwise perform the task and return a concise completio
                     RoleKey = stableRoleKey,
                     Headcount = requestedHeadcount,
                     SourceResourceChangeRequestId = request.Id,
-                    TeamId = request.TeamId
+                    TeamId = request.TeamId,
+                    AssignAsProjectManager = importedManager
                 },
                 cancellationToken);
 

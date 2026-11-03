@@ -300,6 +300,7 @@ public sealed class ChiefCorrectnessTests
                 new(ceo, "Owner", "Human", null, null, null, true) };
             if (withPm) people.Add(new(Guid.NewGuid(), "Product Manager", "Agent", null, ceo, Guid.NewGuid(), true));
             Orchestrator.Context = new(null, null, new(OrganizationId, "Active", people, [], [], [], [], DateTimeOffset.UtcNow), null, null, new([]), []);
+            Runtime.RegisterCapability<JsonElement, OrganizationSnapshotResponse>(PlatformCapabilities.OrganizationSnapshotRead, (_, _) => Task.FromResult(Orchestrator.Context.Organization!));
             Runtime.RegisterCapability<JsonElement, HiringBacklogResponse>(PlatformCapabilities.HiringRecommendationList, (_, _) => Task.FromResult(new HiringBacklogResponse(Backlog)))
                 .RegisterCapability<ResourceChangeReadRequest, ResourceChangeReadResponse>(PlatformCapabilities.ResourceChangeRead,
                     (r, _) => Task.FromResult(new ResourceChangeReadResponse(ResourceChanges.Where(x => r.RequestId is null || x.Id == r.RequestId).ToArray())))

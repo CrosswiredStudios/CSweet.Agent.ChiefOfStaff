@@ -2,7 +2,7 @@
 
 First-party Chief of Staff agent for C-Sweet in `CSweet.Agent.ChiefOfStaff`.
 
-The agent uses `CSweet.Agent.SDK` 5.4.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
+The agent uses `CSweet.Agent.SDK` 5.9.0 callbacks. It receives exact-installation durable work and uses typed, live-grant platform clients. The SDK privately manages runtime connectivity, authentication, leasing, retry, progress, configuration refresh, discovery, and personal to-do draining.
 
 It loads authoritative business, finance, organization, operating-pattern, management-cycle, memory, and hiring-backlog state. It owns executive operating context, organizational design, workforce planning, and the ranked hiring backlog. It originates only CEO-direct managerial hiring recommendations. Active functional leads own their subordinate team recommendations and coordinate with the Chief through approved same-organization capability bindings; neither agent selects the other installation.
 
@@ -41,7 +41,7 @@ dotnet build CSweetAgentChiefOfStaff.slnx
 dotnet test CSweetAgentChiefOfStaff.slnx
 ```
 
-Requirements are .NET 10, `CSweet.Agent.SDK` 5.4.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
+Requirements are .NET 10, `CSweet.Agent.SDK` 5.9.0, an approved protocol-v2 installation, an assigned employee identity for employee workflows, and the grants in [GRANTS.md](GRANTS.md).
 
 ## SDK 1.0 migration
 
@@ -73,9 +73,9 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
-Version 2.15.4 preserves explanations before trailing recommendation questions and rejects profile
+Version 2.16.0 preserves explanations before trailing recommendation questions and rejects profile
 extractions whose values are absent from their source quotes. These are extractive checks; semantic
-interpretation still depends on the model. See [release notes](releases/2.15.4.md).
+interpretation still depends on the model. See [release notes](releases/2.16.0.md).
 
 Version 2.15.3 checks current assignments, project workload and related operating signals before
 asking about leadership coverage. Ordinary assigned managers do not need a separate capacity
@@ -153,7 +153,7 @@ Model token settings default to 256,000 context-window tokens (maxContextWindowT
 
 Management review reporting requires `platform.management.status-report.v1`. Version 2.11.0 declares this capability; approve the added grant when upgrading an existing installation. The host continues to authorize the report against the current management request.
 
-Chief 2.11.1 requires the published `CSweet.Agent.SDK` 4.1.1 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
+Chief 2.11.1 requires the published `CSweet.Agent.SDK` 5.9.0 package, including the four hiring-autonomy capability registrations. Publish the SDK first, then release the Chief. To reproduce release validation locally, run `dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false` so sibling source references cannot hide a package mismatch.
 
 Chief 2.11.2 routes hiring setup using the current owner message separately from the model's conversation and memory prompt. Answering the mode question advances setup instead of restarting it when previous messages mention hiring preferences.
 
@@ -174,3 +174,7 @@ SDK 5.4.0 dispatches authenticated delegation before specialist conversation fal
 This release uses SDK 5.4.0 `ManagerIncidentCoordinator` for evidence-based incident reports and human-selected fixes. The shared SDK dispatcher runs before this agent's specialist intake, coordinates authorized recovery or delegation, and preserves required approvals. The incident presentation/update and resolution/read grants plus `com.csweet.management.incident.owner-report-requested.v1` allow existing open incidents to receive refreshed reports. Apply the platform migration before upgrading.
 
 Activation defaults to OnDemand. Durable messages, assignments, scheduled duties and attention reviews wake the agent; idle runtimes release their Office slot. Attention wakes require the platform scheduler that supports sleeping OnDemand installations. Existing installations retain their selected activation mode until their schedule is updated.
+
+## Existing project onboarding
+
+Review owner-accepted imported project profiles during durable recovery. Recommend a dedicated software Product Manager for each imported application/website. Keep incomplete profiles as incomplete context and retain the Video Game Director/Producer staffing boundaries. Approved imported-game Producer hires retain their existing project binding; imports never authorize hiring or execution.
