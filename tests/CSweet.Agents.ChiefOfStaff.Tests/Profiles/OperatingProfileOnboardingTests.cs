@@ -151,14 +151,91 @@ public sealed class OperatingProfileOnboardingTests
     [InlineData("{}")]
     [InlineData("{\"currentProfileAppropriate\":false,\"recommendedProfileKey\":\"custom\",\"confidence\":0.99,\"reason\":\"custom\"}")]
     [InlineData("{\"currentProfileAppropriate\":false,\"recommendedProfileKey\":\"invented\",\"confidence\":0.99,\"reason\":\"unknown\"}")]
-    public async Task InvalidInference_DoesNotAcknowledgeHiringOrStartFocus(string response)
+    public async Task InvalidInference_ContinuesWithSelectedProfileAndReusesFallbackOnRetry(string response)
     {
         var harness = new Harness(response);
-        var failure = await Assert.ThrowsAsync<PlatformCapabilityException>(harness.HireAsync);
-        Assert.True(failure.Retryable);
-        Assert.Empty(harness.Decisions);
-        Assert.Empty(harness.Todos);
+        await harness.HireAsync();
+        harness.Agent = harness.NewAgent();
+        harness.Model.Response = Assessment(false, "game-studio", 0.99);
+        await harness.HireAsync();
+        var decision = Assert.Single(harness.Decisions.Values);
+        Assert.Null(decision.ConfigurationChange);
+        Assert.Equal("product", decision.Options[0].Id);
+        Assert.Single(harness.Messages);
+        Assert.Equal(4, harness.Todos.Count);
+        Assert.Equal(1, harness.Model.Calls);
+        Assert.Equal(2, harness.Completions);
+        var saved = Assert.Single(harness.States.Values, x => x.StateKey.StartsWith("chief.onboarding-profile:"));
+        Assert.Contains("selected profile was retained", saved.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("provider", false)]
+    [InlineData("provider", true)]
+    [InlineData("factory", false)]
+    [InlineData("http", false)]
+    [InlineData("timeout", false)]
+    [InlineData("deadline", false)]
+    public async Task ModelFailure_StillPresentsOneSetupQuestionAndAcknowledgesOnboarding(string failure, bool setupComplete)
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), setupComplete,
+            SetupStage: setupComplete ? "complete" : "mode");
+        var harness = new Harness("unused", hiringPolicy: policy);
+        harness.Model.Failure = failure switch
+        {
+            "http" => new HttpRequestException("Provider unavailable"),
+            "timeout" => new OperationCanceledException("Provider timeout"),
+            "deadline" => new TimeoutException("Provider deadline"),
+            _ => new PlatformCapabilityException(PlatformCapabilities.LlmChatStream,
+                PlatformCapabilityErrorCode.Unavailable, "Provider rejected the request",
+                failureCode: "llm.request_failed", retryable: false)
+        };
+        harness.Model.FailCreation = failure == "factory";
+        await harness.HireAsync();
+        harness.Agent = harness.NewAgent();
+        await harness.HireAsync();
+        Assert.Single(harness.Messages);
+        var decision = Assert.Single(harness.Decisions.Values);
+        Assert.Null(decision.ConfigurationChange);
+        Assert.Equal(setupComplete ? "product" : "recommend", decision.Options[0].Id);
+        Assert.Equal(2, harness.Completions);
+        Assert.Equal(failure == "factory" ? 0 : 1, harness.Model.Calls);
+    }
+
+    [Theory]
+    [InlineData("game-studio", "creative-product")]
+    [InlineData("custom", "product")]
+    public async Task AssessmentFallback_PreservesTheSelectedProfile(string profile, string firstFocus)
+    {
+        var harness = new Harness("invalid assessment");
+        var updated = await harness.Runtime.ExecuteCapabilityAsync(harness.Agent,
+            AgentConfigurationCapabilities.Update, new UpdateAgentConfigurationRequest(new Dictionary<string, JsonElement>
+            {
+                ["llmProviderId"] = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("D")),
+                ["llmModel"] = JsonSerializer.SerializeToElement("test-model"),
+                ["businessOperatingProfile"] = JsonSerializer.SerializeToElement(profile),
+                ["customBusinessDescription"] = JsonSerializer.SerializeToElement("Custom business")
+            }));
+        Assert.True(updated.Succeeded);
+        await harness.HireAsync();
+        var saved = Assert.Single(harness.States.Values, x => x.StateKey.StartsWith("chief.onboarding-profile:"));
+        Assert.Equal(profile, saved.Payload.GetProperty("currentProfileKey").GetString());
+        Assert.Equal(firstFocus, Assert.Single(harness.Decisions.Values).Options[0].Id);
+        Assert.Null(Assert.Single(harness.Decisions.Values).ConfigurationChange);
+        Assert.Equal(1, harness.Completions);
+    }
+
+    [Fact]
+    public async Task CancelledAssessment_DoesNotPersistFallbackOrAcknowledgeOnboarding()
+    {
+        var harness = new Harness("unused");
+        using var cancellation = new CancellationTokenSource();
+        harness.Model.BeforeResponse = cancellation.Cancel;
+        harness.Model.Failure = new OperationCanceledException(cancellation.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.HireAsync(cancellation.Token));
         Assert.Empty(harness.States);
+        Assert.Empty(harness.Messages);
+        Assert.Empty(harness.Decisions);
         Assert.Equal(0, harness.Completions);
     }
 
@@ -424,8 +501,9 @@ public sealed class OperatingProfileOnboardingTests
         }
         public ChiefOfStaffAgent NewAgent() => new(Model, NullLogger<ChiefOfStaffAgent>.Instance,
             new ChiefOfStaffOrchestrator(NullLogger<ChiefOfStaffOrchestrator>.Instance));
-        public Task HireAsync() => Agent.HandleEventAsync(Event(ChiefOfStaffProfile.OnboardedEvent, EventId,
-            new AgentOnboardedEvent(OrganizationId, EmployeeId, Guid.NewGuid(), ConversationId, DateTimeOffset.UtcNow)), Context, CancellationToken.None);
+        public Task HireAsync() => HireAsync(CancellationToken.None);
+        public Task HireAsync(CancellationToken token) => Agent.HandleEventAsync(Event(ChiefOfStaffProfile.OnboardedEvent, EventId,
+            new AgentOnboardedEvent(OrganizationId, EmployeeId, Guid.NewGuid(), ConversationId, DateTimeOffset.UtcNow)), Context, token);
         public Task AnswerHiringAsync(string text, Guid? turnId = null) => Agent.HandleEventAsync(
             Event(ChiefOfStaffProfile.UserMessageReceivedEvent, Guid.NewGuid(),
                 new UserMessageReceived(Guid.NewGuid(), ConversationId.ToString("D"), Guid.NewGuid().ToString("D"), text, null, turnId ?? Guid.NewGuid())),
@@ -437,10 +515,19 @@ public sealed class OperatingProfileOnboardingTests
         public string Response { get; set; } = response;
         public string Prompt { get; private set; } = "";
         public int Calls { get; private set; }
-        public Task<IChatClient> CreateChatClientAsync(AgentLlmSelection selection, CancellationToken cancellationToken = default) => Task.FromResult<IChatClient>(this);
+        public Exception? Failure { get; set; }
+        public bool FailCreation { get; set; }
+        public Action? BeforeResponse { get; set; }
+        public Task<IChatClient> CreateChatClientAsync(AgentLlmSelection selection, CancellationToken cancellationToken = default)
+        {
+            if (FailCreation && Failure is not null) throw Failure;
+            return Task.FromResult<IChatClient>(this);
+        }
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             Calls++;
+            BeforeResponse?.Invoke();
+            if (Failure is not null) throw Failure;
             Prompt = string.Join("\n", messages.Select(x => x.Text));
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, Response)));
         }

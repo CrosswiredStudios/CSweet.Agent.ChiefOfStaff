@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CSweet.Agent.SDK;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using CSweet.Agents.ChiefOfStaff.Contracts;
 using CSweet.Agents.ChiefOfStaff.Profiles;
 
@@ -28,18 +29,27 @@ public sealed partial class ChiefOfStaffAgent
                     "The company profile is unavailable for the initial operating-profile assessment.", retryable: true);
             var selection = new AgentLlmSelection(Settings.GetGuid("llmProviderId") ?? Guid.Empty,
                 Settings.GetString("llmModel"), new AgentLlmInvocationContext(onboarding.ConversationId, null, "operating-profile-assessment"));
-            var client = _llmClientFactory is null ? context.CreateChatClient(selection)
-                : await _llmClientFactory.CreateChatClientAsync(selection, token);
             try
             {
+                var client = _llmClientFactory is null ? context.CreateChatClient(selection)
+                    : await _llmClientFactory.CreateChatClientAsync(selection, token);
                 assessment = await InferOperatingProfileAsync(client, operatingContext.BusinessProfile, current,
                     Settings.GetString(BusinessOperatingProfiles.CustomDescriptionKey), token);
             }
-            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            catch (Exception exception) when (!token.IsCancellationRequested &&
+                exception is JsonException or InvalidOperationException or PlatformCapabilityException or
+                    HttpRequestException or TimeoutException or OperationCanceledException)
             {
-                throw new PlatformCapabilityException(PlatformCapabilities.LlmChatStream, PlatformCapabilityErrorCode.Unavailable,
-                    "The initial operating-profile assessment did not return a valid result.", exception,
-                    failureCode: "chief.profile-assessment.invalid", retryable: true);
+                // Profile inference is advisory. Keeping the owner's selected mode needs no
+                // model approval and must not prevent the deterministic setup questions.
+                // Persist this outcome like a successful assessment so redelivery cannot
+                // reopen profile selection after the owner has started onboarding.
+                _logger.LogWarning(exception,
+                    "Initial operating-profile assessment failed for onboarding event {EventId}; continuing with selected profile {ProfileKey}.",
+                    message.EventId, current.Key);
+                assessment = new ProfileAssessment(true, current.Key, 0,
+                    "The operating-profile assessment was unavailable; the selected profile was retained.")
+                    { CurrentProfileKey = current.Key };
             }
             await context.Platform.WriteOperatingStateAsync(new AgentOperatingStateWriteRequest(
                 stateKey, "com.csweet.chief.operating-profile-assessment", 1, "Assessed",

@@ -57,11 +57,11 @@ Uses SDK 5.4.0 for acknowledged LLM waiting, conversation activity, and host-aut
 
 ## Initial operating-profile review (2.4.0)
 
-Immediately after hiring, the Chief assesses the selected Business Operating Profile against the saved company information using the configured model. This required orchestration step precedes leadership coverage and focus selection. The assessment is persisted by onboarding event so retries do not produce a different recommendation.
+Immediately after hiring, the Chief assesses the selected Business Operating Profile against the saved company information using the configured model. This advisory assessment precedes leadership coverage and focus selection. If the model is unavailable, rejects the request, times out, or returns an invalid assessment, the Chief retains the selected profile and continues with the setup questions. The assessment or fallback is persisted by onboarding event so retries do not produce a different recommendation.
 
 An appropriate profile, or insufficient evidence for a clearly better preset, continues to hiring preferences and then company focus. A clear mismatch displays the current mode and the suggested preset, with **Switch to …** and **Leave unchanged**. This decision has no Custom or Something else option. An already selected Custom profile is assessed using its description and may remain unchanged.
 
-Accepting the switch saves only the Chief employee's profile override through the platform configuration service, preserving the model and other settings. Both choices resume onboarding through a durable event using the effective saved profile, completing hiring preferences before focus selection. A stale switch is rejected; Leave unchanged preserves the latest settings. Unavailable company data or invalid inference leaves onboarding retryable without creating a focus agenda.
+Accepting the switch saves only the Chief employee's profile override through the platform configuration service, preserving the model and other settings. Both choices resume onboarding through a durable event using the effective saved profile, completing hiring preferences before focus selection. A stale switch is rejected; Leave unchanged preserves the latest settings. Unavailable company data still leaves onboarding retryable without creating a focus agenda. Cancellation, state persistence failures, and unavailable question widgets do not acknowledge onboarding early.
 
 Deploy the matching platform changes before importing 2.4.0, and approve its operating-state grants and configuration-choice event subscription. The installation defaults remain General, with Custom available during installation.
 
@@ -72,6 +72,10 @@ The Chief prefers `ask_user` whenever it needs an answer and the tool is availab
 Restart the matching platform services after deploying profile-choice support: older AgentHost schemas reject `configurationChange`. Version 2.4.1 omits that optional property on ordinary questions. Reimporting this package gives a previously failed onboarding event a fresh package delivery, reusing its original assessment and message keys.
 
 ## Release notes
+
+Version 2.16.1 keeps the initial setup questions available when the optional model-based profile
+assessment fails. Update through the published release and Installed Agents; an unacknowledged
+onboarding event receives a fresh delivery for the new package. See [release notes](releases/2.16.1.md).
 
 Version 2.16.0 preserves explanations before trailing recommendation questions and rejects profile
 extractions whose values are absent from their source quotes. These are extractive checks; semantic
