@@ -73,6 +73,11 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.16.2 hardens release publishing against GitHub server failures. The workflow retries
+temporary errors, resumes incomplete drafts, and verifies the bundle and checksum before
+publishing. Existing published assets are preserved. See [release notes](releases/2.16.2.md).
+`scripts/Test-AgentRelease.ps1` runs the release recovery regression scenarios without GitHub access.
+
 Version 2.16.1 keeps the initial setup questions available when the optional model-based profile
 assessment fails. Update through the published release and Installed Agents; an unacknowledged
 onboarding event receives a fresh delivery for the new package. See [release notes](releases/2.16.1.md).

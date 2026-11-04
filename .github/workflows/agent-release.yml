@@ -6,6 +6,9 @@ on:
     paths:
       - src/CSweet.Agents.ChiefOfStaff/CSweet.Agents.ChiefOfStaff.csproj
       - csweet-plugin.json
+      - .github/workflows/agent-release.yml
+      - scripts/Publish-AgentRelease.ps1
+      - scripts/Test-AgentRelease.ps1
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
@@ -61,6 +64,9 @@ jobs:
           if ($projectVersion -ne $version) { throw "csproj version $projectVersion does not match manifest version $version." }
           if (-not (Test-Path "releases/$version.md")) { throw "Missing releases/$version.md for version $version." }
       - run: dotnet test CSweetAgentChiefOfStaff.slnx -c Release -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false
+      - name: Test release recovery
+        shell: pwsh
+        run: ./scripts/Test-AgentRelease.ps1
       - name: Publish linux-x64 agent
         run: dotnet publish src/CSweet.Agents.ChiefOfStaff/CSweet.Agents.ChiefOfStaff.csproj -c Release --framework net10.0 --runtime linux-x64 --self-contained false -o publish/linux-x64 -p:UseLocalCSweetAgentSdk=false -p:UseLocalCSweetMemory=false
       - name: Stage manifest and pack bundle
@@ -92,9 +98,4 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
           BUNDLE: ${{ steps.bundle.outputs.bundle }}
         run: |
-          gh release view $env:RELEASE_TAG --repo '${{ github.repository }}' *> $null
-          if ($LASTEXITCODE -eq 0) { exit 0 }
-          $releaseFlags = @()
-          if ($env:RELEASE_VERSION.Contains('-')) { $releaseFlags = @('--prerelease', '--latest=false') }
-          gh release create $env:RELEASE_TAG --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "Chief of Staff $env:RELEASE_VERSION" --notes-file "releases/$env:RELEASE_VERSION.md" $env:BUNDLE "$env:BUNDLE.sha256" @releaseFlags
-          if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed." }
+          ./scripts/Publish-AgentRelease.ps1 -Repository '${{ github.repository }}' -Tag $env:RELEASE_TAG -Version $env:RELEASE_VERSION -Target '${{ github.sha }}' -Bundle $env:BUNDLE
