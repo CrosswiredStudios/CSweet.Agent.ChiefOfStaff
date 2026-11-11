@@ -73,6 +73,10 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.16.3 recovers equivalent empty drafts left by retried release creation. Publishing
+uses one release ID for uploads and publication, and branch/tag runs share a concurrency group.
+Conflicting drafts still require review. See [release notes](releases/2.16.3.md).
+
 Version 2.16.2 hardens release publishing against GitHub server failures. The workflow retries
 temporary errors, resumes incomplete drafts, and verifies the bundle and checksum before
 publishing. Existing published assets are preserved. See [release notes](releases/2.16.2.md).

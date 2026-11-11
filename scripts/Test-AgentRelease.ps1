@@ -14,7 +14,8 @@ try {
     }
     function Reply($Command, $Output, $Code = 0) { @{ Command = $Command; Output = $Output; Code = $Code } }
     function ReleaseJson($Draft, $Assets) {
-        @{ draft = $Draft; assets = @($Assets); html_url = 'https://github.com/example/agent/releases/tag/v1.0.0' } | ConvertTo-Json -Depth 5 -Compress
+        @{ id = 101; tag_name = 'v1.0.0'; target_commitish = 'abc123'; name = 'Chief of Staff 1.0.0'; body = '# 1.0.0';
+           prerelease = $false; draft = $Draft; assets = @($Assets); html_url = 'https://github.com/example/agent/releases/tag/v1.0.0' } | ConvertTo-Json -Depth 5 -Compress
     }
     $emptyDraft = ReleaseJson $true @()
     $readyDraft = ReleaseJson $true $assets
@@ -51,31 +52,104 @@ try {
 
     Run-Scenario 'Missing release creates a draft, uploads, verifies, then publishes' @(
         (Reply 'api *' 'gh: Not Found (HTTP 404)' 1), (Reply 'api *--paginate --slurp' '[[]]'), (Reply 'release create *--draft*' 'created'),
-        (Reply 'api *' $emptyDraft), (Reply 'release upload *' 'uploaded'),
-        (Reply 'api *' $readyDraft), (Reply 'release edit *--draft=false*' 'published'),
-        (Reply 'api *' $published))
+        (Reply 'api *' $emptyDraft),
+        (Reply 'api --method POST https://uploads.github.com/repos/example/agent/releases/101/assets?name=agent.csab --header * --input *' 'uploaded'),
+        (Reply 'api --method POST https://uploads.github.com/repos/example/agent/releases/101/assets?name=agent.csab.sha256 --header * --input *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/101' $readyDraft),
+        (Reply 'api --method PATCH repos/example/agent/releases/101 -F draft=false' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
 
     Run-Scenario 'Create 500 with committed draft resumes without duplicate create' @(
         (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' '[[]]'), (Reply 'release create *' 'HTTP 500' 1),
-        (Reply 'api *' $emptyDraft), (Reply 'release upload *' 'uploaded'),
-        (Reply 'api *' $readyDraft), (Reply 'release edit *' 'published'), (Reply 'api *' $published))
+        (Reply 'api *' $emptyDraft), (Reply 'api --method POST https://uploads.github.com/*name=agent.csab --header *' 'uploaded'),
+        (Reply 'api --method POST https://uploads.github.com/*name=agent.csab.sha256 --header *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/101' $readyDraft), (Reply 'api --method PATCH *' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
 
     Run-Scenario 'Upload 502 with one committed asset uploads only the missing checksum' @(
-        (Reply 'api *' $emptyDraft), (Reply 'release upload *' 'HTTP 502' 1),
-        (Reply 'api *' (ReleaseJson $true @($assets[0]))), (Reply 'release upload *agent.csab.sha256' 'uploaded'),
-        (Reply 'api *' $readyDraft), (Reply 'release edit *' 'published'), (Reply 'api *' $published))
-    if (($global:csweetReleaseTestCalls | Where-Object { $_ -like 'release upload *' })[1] -match 'agent.csab ') { throw 'Existing bundle was uploaded twice.' }
+        (Reply 'api *' $emptyDraft), (Reply 'api --method POST https://uploads.github.com/*name=agent.csab --header *' 'HTTP 502' 1),
+        (Reply 'api repos/example/agent/releases/101' (ReleaseJson $true @($assets[0]))),
+        (Reply 'api --method POST https://uploads.github.com/*name=agent.csab.sha256 --header *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/101' $readyDraft), (Reply 'api --method PATCH *' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
+    if (($global:csweetReleaseTestCalls | Where-Object { $_ -like '*name=agent.csab --header *' }).Count -ne 1) { throw 'Existing bundle was uploaded twice.' }
 
     Run-Scenario 'Publish 500 with committed publication is verified' @(
-        (Reply 'api *' $readyDraft), (Reply 'release edit *' 'HTTP 500' 1), (Reply 'api *' $published))
+        (Reply 'api *' $readyDraft), (Reply 'api --method PATCH *' 'HTTP 500' 1), (Reply 'api repos/example/agent/releases/101' $published))
 
     Run-Scenario 'Existing complete release performs no writes' @((Reply 'api *' $published))
     $untaggedDraft = $readyDraft | ConvertFrom-Json
-    $untaggedDraft | Add-Member -NotePropertyName tag_name -NotePropertyValue 'v1.0.0'
     $draftPages = '[[' + ($untaggedDraft | ConvertTo-Json -Depth 5 -Compress) + ']]'
     Run-Scenario 'Draft without a Git tag is discovered before creating anything' @(
         (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $draftPages),
-        (Reply 'release edit *' 'published'), (Reply 'api *' $published))
+        (Reply 'api --method PATCH repos/example/agent/releases/101 -F draft=false' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
+
+    $duplicate = $emptyDraft | ConvertFrom-Json
+    $duplicate.id = 102
+    $duplicateJson = $duplicate | ConvertTo-Json -Depth 5 -Compress
+    # Include another tag and split across pages to cover authenticated pagination.
+    $otherTag = $emptyDraft | ConvertFrom-Json
+    $otherTag.tag_name = 'v0.9.0'
+    $duplicatePages = '[[' + $duplicateJson + ',' + ($otherTag | ConvertTo-Json -Depth 5 -Compress) + '],[' + $emptyDraft + ']]'
+    Run-Scenario 'Retried create leaves two empty drafts; oldest ID receives all writes' @(
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $duplicatePages),
+        (Reply 'api --method POST https://uploads.github.com/*releases/101/assets?name=agent.csab --header *' 'uploaded'),
+        (Reply 'api --method POST https://uploads.github.com/*releases/101/assets?name=agent.csab.sha256 --header *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/101' $readyDraft),
+        (Reply 'api --method PATCH repos/example/agent/releases/101 -F draft=false' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
+
+    Run-Scenario 'Create 500 with duplicate committed drafts resumes by ID' @(
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' '[[]]'),
+        (Reply 'release create *' 'HTTP 500' 1),
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $duplicatePages),
+        (Reply 'api --method POST https://uploads.github.com/*releases/101/assets?name=agent.csab --header *' 'uploaded'),
+        (Reply 'api --method POST https://uploads.github.com/*releases/101/assets?name=agent.csab.sha256 --header *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/101' $readyDraft), (Reply 'api --method PATCH *' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published))
+
+    $partialDuplicate = $duplicateJson | ConvertFrom-Json
+    $partialDuplicate.assets = @($assets[0])
+    $partialPages = '[[' + $emptyDraft + ',' + ($partialDuplicate | ConvertTo-Json -Depth 5 -Compress) + ']]'
+    $readyDuplicate = $readyDraft | ConvertFrom-Json
+    $readyDuplicate.id = 102
+    $publishedDuplicate = $published | ConvertFrom-Json
+    $publishedDuplicate.id = 102
+    Run-Scenario 'Rerun resumes the sole partial draft alongside an empty duplicate' @(
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $partialPages),
+        (Reply 'api --method POST https://uploads.github.com/*releases/102/assets?name=agent.csab.sha256 --header *' 'uploaded'),
+        (Reply 'api repos/example/agent/releases/102' ($readyDuplicate | ConvertTo-Json -Depth 5 -Compress)),
+        (Reply 'api --method PATCH repos/example/agent/releases/102 -F draft=false' 'published'),
+        (Reply 'api repos/example/agent/releases/102' ($publishedDuplicate | ConvertTo-Json -Depth 5 -Compress)))
+
+    $bothPopulated = '[[' + $readyDraft + ',' + ($partialDuplicate | ConvertTo-Json -Depth 5 -Compress) + ']]'
+    Run-Scenario 'Two populated drafts require review without writes' @(
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $bothPopulated)) 'conflicting metadata or assets'
+
+    $partialDuplicate = $partialDuplicate | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+    $partialDuplicate.assets[0].digest = 'sha256:different'
+    $mismatchedPages = '[[' + $emptyDraft + ',' + ($partialDuplicate | ConvertTo-Json -Depth 5 -Compress) + ']]'
+    Run-Scenario 'Sole populated duplicate with mismatched content requires review' @(
+        (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $mismatchedPages)) 'refusing to replace'
+
+    foreach ($conflict in @('target_commitish', 'body', 'name', 'prerelease', 'draft')) {
+        $different = $duplicateJson | ConvertFrom-Json
+        switch ($conflict) {
+            target_commitish { $different.target_commitish = 'different' }
+            body { $different.body = 'different notes' }
+            name { $different.name = 'different title' }
+            prerelease { $different.prerelease = $true }
+            draft { $different.draft = $false }
+        }
+        $conflictPages = '[[' + $emptyDraft + ',' + ($different | ConvertTo-Json -Depth 5 -Compress) + ']]'
+        Run-Scenario "Duplicate drafts with conflicting $conflict require review without writes" @(
+            (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' $conflictPages)) 'conflicting metadata or assets'
+    }
+    $wrongTarget = $readyDraft | ConvertFrom-Json
+    $wrongTarget.target_commitish = 'different'
+    Run-Scenario 'Single draft targeting another commit is preserved' @(
+        (Reply 'api *' ($wrongTarget | ConvertTo-Json -Depth 5 -Compress))) 'different commit'
     Run-Scenario 'Authentication failure does not create a release' @((Reply 'api *' 'HTTP 403' 1)) 'HTTP 403'
     Run-Scenario 'Repeated 503 errors stop at the retry limit' @(
         (Reply 'api *' 'HTTP 503' 1), (Reply 'api *' 'HTTP 503' 1), (Reply 'api *' 'HTTP 503' 1)) 'retry limit'
@@ -89,9 +163,10 @@ try {
 
     Run-Scenario 'Prerelease remains excluded from latest' @(
         (Reply 'api *' 'HTTP 404' 1), (Reply 'api *--paginate --slurp' '[[]]'), (Reply 'release create *--draft --prerelease' 'created'),
-        (Reply 'api *' $readyDraft), (Reply 'release edit *--draft=false --prerelease --latest=false' 'published'),
-        (Reply 'api *' $published)) '' '1.0.0-beta.1'
-    Write-Host 'All 12 release recovery scenarios passed.'
+        (Reply 'api *' $readyDraft),
+        (Reply 'api --method PATCH repos/example/agent/releases/101 -F draft=false -F prerelease=true -f make_latest=false' 'published'),
+        (Reply 'api repos/example/agent/releases/101' $published)) '' '1.0.0-beta.1'
+    Write-Host 'All release recovery scenarios passed.'
 }
 finally {
     Pop-Location

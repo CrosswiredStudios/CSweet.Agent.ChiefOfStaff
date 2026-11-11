@@ -38,12 +38,13 @@ function Assert-RetryableFailure($Result) {
 }
 
 $endpoint = "repos/$Repository/releases/tags/$([Uri]::EscapeDataString($Tag))"
+$releaseEndpoint = $endpoint
 $failures = 0
 for ($step = 1; $step -le ($MaximumAttempts * 4); $step++) {
     $failed = $false
     # Always re-read before retrying a write: GitHub may have committed it before
     # returning a 500 or losing the response. Never overwrite existing assets.
-    $lookup = Invoke-ReleaseGh @('api', $endpoint)
+    $lookup = Invoke-ReleaseGh @('api', $releaseEndpoint)
     $missingRelease = $false
     if ($lookup.ExitCode -ne 0 -and $lookup.Output -match '\bHTTP 404\b') {
         # A draft can precede creation of its Git tag. Discover it through the
@@ -53,7 +54,24 @@ for ($step = 1; $step -le ($MaximumAttempts * 4); $step++) {
             $matchingReleases = @(foreach ($page in ($lookup.Output | ConvertFrom-Json)) {
                 foreach ($candidate in $page) { if ($candidate.tag_name -ceq $Tag) { $candidate } }
             })
-            if ($matchingReleases.Count -gt 1) { throw "Multiple releases use tag $Tag; stopped for review." }
+            if ($matchingReleases.Count -gt 1) {
+                # A retried create can leave equivalent empty drafts. Prefer the
+                # sole draft with assets on reruns, otherwise choose the oldest ID.
+                # Preserve all drafts; conflicting metadata or assets need review.
+                $first = $matchingReleases[0]
+                $conflicts = @($matchingReleases | Where-Object {
+                    -not $_.draft -or $_.target_commitish -cne $Target -or
+                    $_.name -cne $first.name -or $_.body -cne $first.body -or
+                    $_.prerelease -ne $first.prerelease
+                })
+                $populated = @($matchingReleases | Where-Object { @($_.assets).Count -gt 0 })
+                if ($conflicts.Count -gt 0 -or $populated.Count -gt 1) {
+                    throw "Multiple releases use tag $Tag with conflicting metadata or assets; stopped for review. IDs: $($matchingReleases.id -join ', ')"
+                }
+                if ($populated.Count -eq 1) { $matchingReleases = $populated }
+                else { $matchingReleases = @($matchingReleases | Sort-Object id | Select-Object -First 1) }
+                Write-Warning "Equivalent drafts use tag $Tag; resuming release ID $($matchingReleases[0].id) and preserving empty duplicates."
+            }
             if ($matchingReleases.Count -eq 0) { $missingRelease = $true }
             else { $lookup.Output = $matchingReleases[0] | ConvertTo-Json -Depth 20 -Compress }
         }
@@ -68,6 +86,11 @@ for ($step = 1; $step -le ($MaximumAttempts * 4); $step++) {
     elseif ($lookup.ExitCode -ne 0) { Assert-RetryableFailure $lookup; $failed = $true }
     else {
         $release = $lookup.Output | ConvertFrom-Json
+        if (-not $release.id) { throw 'GitHub release response has no ID.' }
+        $releaseEndpoint = "repos/$Repository/releases/$($release.id)"
+        if ($release.draft -and $release.target_commitish -cne $Target) {
+            throw "Draft release $($release.id) targets a different commit; stopped for review."
+        }
         $missing = @()
         foreach ($expected in $expectedAssets) {
             $asset = @($release.assets | Where-Object name -CEQ $expected.Name)
@@ -83,14 +106,18 @@ for ($step = 1; $step -le ($MaximumAttempts * 4); $step++) {
             return
         }
         if ($missing.Count -gt 0) {
-            $uploaded = Invoke-ReleaseGh (@('release', 'upload', $Tag, '--repo', $Repository) + @($missing.Path))
-            if ($uploaded.ExitCode -ne 0) { Assert-RetryableFailure $uploaded; $failed = $true }
+            foreach ($asset in $missing) {
+                $uploadEndpoint = "https://uploads.github.com/$releaseEndpoint/assets?name=$([Uri]::EscapeDataString($asset.Name))"
+                $uploaded = Invoke-ReleaseGh @('api', '--method', 'POST', $uploadEndpoint,
+                    '--header', 'Content-Type: application/octet-stream', '--header', "Content-Length: $($asset.Size)", '--input', $asset.Path)
+                if ($uploaded.ExitCode -ne 0) { Assert-RetryableFailure $uploaded; $failed = $true; break }
+            }
         }
         else {
             # The previous read verified both assets before exposing the release.
             $flags = @()
-            if ($Version.Contains('-')) { $flags = @('--prerelease', '--latest=false') }
-            $published = Invoke-ReleaseGh (@('release', 'edit', $Tag, '--repo', $Repository, '--draft=false') + $flags)
+            if ($Version.Contains('-')) { $flags = @('-F', 'prerelease=true', '-f', 'make_latest=false') }
+            $published = Invoke-ReleaseGh (@('api', '--method', 'PATCH', $releaseEndpoint, '-F', 'draft=false') + $flags)
             if ($published.ExitCode -ne 0) { Assert-RetryableFailure $published; $failed = $true }
         }
     }

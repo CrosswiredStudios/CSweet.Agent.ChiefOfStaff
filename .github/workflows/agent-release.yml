@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: agent-release-${{ github.ref }}
+  group: agent-release
   cancel-in-progress: false
 
 jobs:
