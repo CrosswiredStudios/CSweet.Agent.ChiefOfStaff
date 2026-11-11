@@ -255,37 +255,52 @@ Only populate roleKey, roleTitle and roleObjective for Hire; leave them null for
 """),
             new(ChatRole.User, JsonSerializer.Serialize(new { assessment, state.Focus, state.Assignments, operating, workloadReview = workloads, allowedHiringRoleKeys = allowedRoles }))
         };
-        for (var attempt = 0; attempt < 2; attempt++)
+        try
         {
             // Reasoning models count their internal tokens against this budget too.
             // Keep a bounded allowance large enough to return the typed result.
-            var response = await model.GetResponseAsync(messages, new() { MaxOutputTokens = 6000 }, token);
-            try
+            return await AgentModelJson.ReadAsync(model, messages, new AgentModelJsonRequest<ChiefCoverageResult>("leadership coverage assessment")
             {
-                var json = response.Text.Trim();
-                if (json.StartsWith("```", StringComparison.Ordinal) && json.EndsWith("```", StringComparison.Ordinal) && json.IndexOf('\n') is var start && start >= 0)
-                    json = json[(start + 1)..^3].Trim();
-                var result = JsonSerializer.Deserialize<ChiefCoverageResult>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-                if (result is not null && !string.IsNullOrWhiteSpace(result.Rationale) && result.Rationale.Length <= 2048 &&
-                    result.EvidenceOrganizationUserIds is not null && result.EvidenceOrganizationUserIds.All(id => state.Assignments.Any(x => x.OrganizationUserId == id)) &&
-                    result.NextAction is "None" or "Question" or "Hire" or "External" or "Review" or "Blocked" &&
-                    (result.NextAction != "Hire" || !result.HumanRequired && (!gameStudio || allowedRoles!.Contains(result.RoleKey))))
-                {
-                    // A useful clarification must not assert ownership that its own question
-                    // is still trying to establish. Keep prior platform-confirmed ownership.
-                    if (result.NextAction is "Question" or "External" && result.AccountableOwnerId is { } proposed &&
-                        assessment.AccountableOwnerId != proposed &&
-                        !state.Assignments.Any(x => x.OrganizationUserId == proposed &&
-                            x.RoleKeys.Any(k => k is not ("chief-executive-officer" or "chief-of-staff"))))
-                        result = result with { AccountableOwnerId = null };
-                    return result.NextAction == "Hire" ? result : result with { RoleKey = null, RoleTitle = null, RoleObjective = null };
-                }
-            }
-            catch (JsonException) { }
-            messages.Add(new(ChatRole.Assistant, "The previous result did not satisfy the public JSON contract."));
-            messages.Add(new(ChatRole.User, "Return one valid bounded JSON result using only the supplied facts and active identities. For a hire, use an allowedHiringRoleKeys entry for this assessment; never replace a licensed-human requirement with an agent."));
+                Options = new ChatOptions { MaxOutputTokens = 6000 },
+                CorrectionLimit = 1,
+                Normalize = result => NormalizeCoverage(result, assessment, state, gameStudio, allowedRoles)
+            }, token);
         }
-        return new("NeedsCoverage", "Unresolved", null, "The assessment did not return valid supported evidence after two attempts.", "Blocked", []);
+        catch (AgentModelJsonException error)
+        {
+            var problem = error.Problem.Length <= 500 ? error.Problem : error.Problem[..497] + "...";
+            return new("NeedsCoverage", "Unresolved", null,
+                $"The assessment did not return valid supported evidence after two attempts: {problem}", "Blocked", []);
+        }
+    }
+
+    // Derives what follows from the assessment and names, for the model to correct, what code cannot settle.
+    private static ChiefCoverageResult NormalizeCoverage(ChiefCoverageResult result, ChiefCoverageAssessment assessment,
+        ChiefLeadershipSnapshot state, bool gameStudio, IReadOnlyList<string>? allowedRoles)
+    {
+        var problems = new List<string>();
+        if (string.IsNullOrWhiteSpace(result.Rationale)) problems.Add("rationale is empty");
+        else if (result.Rationale.Length > 2048) problems.Add($"rationale has {result.Rationale.Length} characters; keep it to at most 2048");
+        var unknown = (result.EvidenceOrganizationUserIds ?? []).Where(id => !state.Assignments.Any(x => x.OrganizationUserId == id)).ToArray();
+        if (unknown.Length > 0)
+            problems.Add($"evidenceOrganizationUserIds contains {string.Join(", ", unknown)}, which are not active assignments; use only supplied identities");
+        if (result.NextAction is not ("None" or "Question" or "Hire" or "External" or "Review" or "Blocked"))
+            problems.Add($"nextAction \"{result.NextAction}\" must be None, Question, Hire, External, Review or Blocked");
+        if (result.NextAction == "Hire" && result.HumanRequired)
+            problems.Add("a human-required or licensed need cannot be a Hire; use Question or External");
+        if (result.NextAction == "Hire" && gameStudio && !allowedRoles!.Contains(result.RoleKey))
+            problems.Add($"roleKey \"{result.RoleKey}\" is not allowed for this assessment; use one of {string.Join(", ", allowedRoles!)}");
+        if (problems.Count > 0) throw new AgentModelJsonException(string.Join("; ", problems));
+
+        result = result with { EvidenceOrganizationUserIds = result.EvidenceOrganizationUserIds ?? [] };
+        // A useful clarification must not assert ownership that its own question
+        // is still trying to establish. Keep prior platform-confirmed ownership.
+        if (result.NextAction is "Question" or "External" && result.AccountableOwnerId is { } proposed &&
+            assessment.AccountableOwnerId != proposed &&
+            !state.Assignments.Any(x => x.OrganizationUserId == proposed &&
+                x.RoleKeys.Any(k => k is not ("chief-executive-officer" or "chief-of-staff"))))
+            result = result with { AccountableOwnerId = null };
+        return result.NextAction == "Hire" ? result : result with { RoleKey = null, RoleTitle = null, RoleObjective = null };
     }
 
     private static IReadOnlyList<string> GameStudioLeadershipRoles(string domain) => domain switch

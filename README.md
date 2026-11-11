@@ -73,6 +73,10 @@ Restart the matching platform services after deploying profile-choice support: o
 
 ## Release notes
 
+Version 2.17.0 reads leadership coverage assessments with the SDK's `AgentModelJson`: a rejected reply goes
+back to the model with its previous answer and the exact problem, instead of a generic retry note. No grant changes.
+See [release notes](releases/2.17.0.md).
+
 Version 2.16.3 recovers equivalent empty drafts left by retried release creation. Publishing
 uses one release ID for uploads and publication, and branch/tag runs share a concurrency group.
 Conflicting drafts still require review. See [release notes](releases/2.16.3.md).

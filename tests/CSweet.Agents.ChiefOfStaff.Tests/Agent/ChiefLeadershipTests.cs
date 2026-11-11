@@ -395,6 +395,21 @@ public sealed class ChiefLeadershipTests
         public string BuildGroundedPrompt(string prompt, string capability, ChiefOperatingContext context, AgentSettings settings) => prompt;
         public Task CaptureExplicitFactsAsync(IChatClient model, AssistantCapabilityInput input, ChiefOperatingContext context, AgentRuntimeContext runtime, CancellationToken token) => Task.CompletedTask;
     }
+    [Fact]
+    public async Task RejectedCoverageIsCorrectedWithItsExactProblem()
+    {
+        var unknown = Guid.NewGuid();
+        var model = new Model(JsonSerializer.Serialize(new ChiefCoverageResult("AdequatelyCovered", "Agent", null,
+            "Claimed owner", "None", [unknown])));
+        var state = State();
+        var result = await ChiefOfStaffAgent.InterpretCoverageAsync(model, state.Assessments[0], state, new(null, null, null, null, null, null, []), default);
+        Assert.Equal(2, model.Calls);
+        Assert.Contains(unknown.ToString(), model.UserPrompt); // The correction names the unsupported identity.
+        Assert.Contains("not active assignments", model.UserPrompt);
+        Assert.Equal("Blocked", result.NextAction);
+        Assert.Contains("not active assignments", result.Rationale);
+    }
+
     private sealed class Model(string response) : IChatClient, IAgentLlmClientFactory
     {
         public int Calls;
