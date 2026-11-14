@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths:
+      - scripts/prepare-ci-dependencies.py
+      - scripts/test-ci-dependencies.py
+      - build/ci-dependencies.json
       - src/CSweet.Agents.ChiefOfStaff/CSweet.Agents.ChiefOfStaff.csproj
       - csweet-plugin.json
       - .github/workflows/agent-release.yml
@@ -40,6 +43,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Verify CI dependency fallback
+        env:
+          CSWEET_RUN_DEPENDENCY_INTEGRATION: '1'
+        run: python3 scripts/test-ci-dependencies.py
+      - name: Prepare pinned C-Sweet dependencies
+        env:
+          CSWEET_DEPENDENCY_TOKEN: ${{ secrets.CSWEET_DEPENDENCY_READ_TOKEN }}
+        run: python3 scripts/prepare-ci-dependencies.py
       - name: Resolve version
         id: version
         shell: pwsh
@@ -99,3 +110,10 @@ jobs:
           BUNDLE: ${{ steps.bundle.outputs.bundle }}
         run: |
           ./scripts/Publish-AgentRelease.ps1 -Repository '${{ github.repository }}' -Tag $env:RELEASE_TAG -Version $env:RELEASE_VERSION -Target '${{ github.sha }}' -Bundle $env:BUNDLE
+      - name: Upload dependency provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-ci-dependencies
+          path: .artifacts/ci-dependencies/resolved.json
+          if-no-files-found: ignore
