@@ -14,7 +14,7 @@
   },
   "id": "com.csweet.chief-of-staff",
   "name": "Evelyn Brooks",
-  "version": "2.17.2",
+  "version": "2.18.0",
   "publisher": {
     "id": "com.csweet",
     "name": "C-Sweet"
@@ -577,6 +577,7 @@
       "com.csweet.workforce-plan.decided.v1",
       "com.csweet.workforce.changed.v1",
       "com.csweet.hiring-recommendation.fulfilled.v1",
+      "com.csweet.hiring-candidate.review-requested.v1",
       "com.csweet.project-health.review-due.v1",
       "com.csweet.management.incident.changed.v1",
       "com.csweet.agent.attention.review-due.v1",

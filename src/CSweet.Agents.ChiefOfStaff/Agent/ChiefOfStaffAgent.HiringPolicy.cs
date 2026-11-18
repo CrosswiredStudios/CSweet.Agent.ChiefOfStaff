@@ -181,12 +181,30 @@ public sealed partial class ChiefOfStaffAgent
             _ = await PrepareHiringCandidateAsync(recommendation.Id, context, token);
     }
 
-    private static async Task<bool> PrepareHiringCandidateAsync(Guid recommendationId, AgentRuntimeContext context, CancellationToken token)
+    private async Task<bool> PrepareHiringCandidateAsync(Guid recommendationId, AgentRuntimeContext context, CancellationToken token)
     {
+        var comparing = false;
         try
         {
             var selected = await context.Platform.InvokeAsync<SelectHiringCandidateRequest, HiringCandidateSelectionResponse>(
                 HiringAutonomyCapabilities.SelectCandidate, new(recommendationId), token);
+            if (selected.Brief is { } brief)
+            {
+                comparing = true;
+                if (brief.Question is null || brief.Answer is not null)
+                {
+                    var decision = await CompareCandidatesAsync(brief, context, token);
+                    selected = await context.Platform.InvokeAsync<SelectHiringCandidateRequest, HiringCandidateSelectionResponse>(
+                        HiringAutonomyCapabilities.SelectCandidate, new(recommendationId) { Decision = decision }, token);
+                }
+                if (selected.Brief is { } pending)
+                {
+                    if (pending is { DispatchKey: { } key, PlanAuthorId: { } author, Question: { } question })
+                        await context.Platform.Communication.SendDirectAgentMessageAsync(author,
+                            $"{pending.Title} — {pending.ProjectGoal ?? pending.Objective}\n\n{question}", key, token);
+                    return selected.Mode == HiringSelectionMode.RecommendCandidates;
+                }
+            }
             if (selected.Mode == HiringSelectionMode.Automatic && selected.Candidate is not null)
             {
                 var result = await context.Platform.InvokeAsync<SubmitDelegatedHireRequest, DelegatedHireResponse>(
@@ -194,7 +212,7 @@ public sealed partial class ChiefOfStaffAgent
                 if (result.Status is "Succeeded" or "Starting" or "Queued" or "Building" or "CompletingHire") return false;
             }
         }
-        catch (PlatformCapabilityException) { /* A candidate-selection failure preserves the manual marketplace action. */ }
+        catch (PlatformCapabilityException) when (!comparing) { /* Existing recommendations retain their marketplace action. */ }
         return true;
     }
 }

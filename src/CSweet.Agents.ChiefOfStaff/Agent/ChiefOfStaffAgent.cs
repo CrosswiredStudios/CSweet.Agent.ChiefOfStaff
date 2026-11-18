@@ -163,6 +163,13 @@ public sealed partial class ChiefOfStaffAgent : CSweetManagerAgentBase, IAgentAc
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (message.EventType == HiringCandidateReviewWake.EventType)
+        {
+            var wake = DeserializePayload<HiringCandidateReviewWake>(message.Payload);
+            if (wake is null) throw new JsonException("Missing hiring review recommendation.");
+            await PrepareHiringCandidateAsync(wake.RecommendationId, context, cancellationToken);
+            return;
+        }
         if (message.EventType == ChiefLeadershipCapabilities.Changed)
         {
             await ProcessLeadershipAsync(context, cancellationToken);
@@ -1378,7 +1385,7 @@ impossible, or denied. Otherwise perform the task and return a concise completio
             cancellationToken);
     }
 
-    private static async Task SuggestMarketplaceActionAsync(
+    private async Task SuggestMarketplaceActionAsync(
         Guid messageId,
         string role,
         Guid recommendationId,
