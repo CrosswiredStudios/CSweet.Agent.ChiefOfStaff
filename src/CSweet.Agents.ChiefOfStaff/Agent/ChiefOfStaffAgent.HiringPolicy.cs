@@ -125,32 +125,46 @@ public sealed partial class ChiefOfStaffAgent
         {
             "level" => ("How much automatic hiring authority should I have?", new List<RequestUserInputOption>
             {
-                new("approved", "Approved packages", "Reuse packages and permissions you’ve already approved."),
-                new("bounded", "Within limits", "Install packages within your explicit cost and permission limits."),
-                new("broad", "Broad delegation", "Hire my own leadership recommendations and fill approved team roles. Install eligible packages and grant their requested permissions. This gives me the most authority and carries the greatest risk.")
+                new("approved", "Approved packages", "I’d use only agents and permissions you’ve already approved.",
+                    "I could fill a role without asking again. You’d still decide whether to allow a new package or new access."),
+                new("bounded", "Within limits", "I’d hire within the spending and access limits you set.",
+                    "You’d set a budget per hire, a total budget, and the access I can grant. I could hire on my own inside those limits."),
+                new("broad", "Broad delegation", "I could hire the leaders I recommend and fill approved team roles. I could install eligible packages and grant their requested permissions.",
+                    "I wouldn’t ask you to review each hire first, so a new hire could get more access than you intended.")
             }, "approved"),
             "publishers" => ("Which publishers should I consider for hiring?", new List<RequestUserInputOption>
             {
-                new("prefer", "Prefer first-party", "Use suitable first-party agents first, with third-party fallback."),
-                new("first", "First-party only", "Only consider agents from the platform first-party catalog."),
-                new("best", "Best fit", "Choose by role fit regardless of publisher.")
+                new("prefer", "Prefer first-party", "I’d look for a suitable C-Sweet agent first.",
+                    "If I couldn’t find a good match there, I could still consider other publishers for your team."),
+                new("first", "First-party only", "I’d consider only agents from C-Sweet.",
+                    "If another publisher had a better match for your role, I’d leave that candidate out."),
+                new("best", "Best fit", "I’d look for the closest match to your role across publishers.",
+                    "I could pick an agent from another publisher even when C-Sweet has a candidate.")
             }, "prefer"),
             "costs" => ("What automatic hiring cost limits should I use?", new List<RequestUserInputOption>
             {
-                new("free", "Free agents only", "Zero per hire and zero total package cost, in USD."),
-                new("skip", "Keep recommending", "Choose hiring cost limits later.")
+                new("free", "Free agents only", "I’d only hire agents with a package price of $0.",
+                    "I couldn’t commit you to a paid package through automatic hiring."),
+                new("skip", "Keep recommending", "I’d keep bringing candidates to you for review.",
+                    "You’d approve each hire and could set a hiring budget later.")
             }, "free"),
             "permissions" => ("Which permissions may new hiring packages request?", new List<RequestUserInputOption>
             {
-                new("none", "No capabilities or network access", "New packages cannot request capabilities or network access."),
-                new("existing", "Permissions already approved here", "Allow capability keys and network entries already granted to enabled agents in this business."),
-                new("skip", "Keep recommending", "Choose exact permissions in settings later.")
+                new("none", "No capabilities or network access", "I’d only install new agents that need no special permissions or network access.",
+                    "If you wanted an agent that needed access to a tool or website, I couldn’t install it automatically."),
+                new("existing", "Permissions already approved here", "I’d stay within the access your active agents already have.",
+                    "A new hire could use tools or network connections you’ve allowed here. I couldn’t introduce a new kind of access."),
+                new("skip", "Keep recommending", "I’d keep bringing candidates to you for review.",
+                    "You’d approve each hire and could choose access limits later in settings.")
             }, "none"),
             _ => ("How should I help with hiring?", new List<RequestUserInputOption>
             {
-                new("recommend", "Recommend candidates", "I’ll select a candidate; you review and confirm each hire."),
-                new("choose", "Choose candidates yourself", "I’ll explain the role and take you to filtered candidates."),
-                new("automatic", "Automatic hiring", "I’ll hire my own leadership recommendations and fill approved team roles within the authority we agree on.")
+                new("recommend", "Recommend candidates", "I’d recommend someone for each role.",
+                    "You’d review my pick and decide whether to hire them."),
+                new("choose", "Choose candidates yourself", "I’d explain the role and show you matching candidates.",
+                    "You’d compare the candidates and choose who to hire."),
+                new("automatic", "Automatic hiring", "I could hire the leaders I recommend and fill approved team roles.",
+                    "You’d choose how much authority to give me next. Then I could make eligible hires without asking about each one.")
             }, "recommend")
         };
         var key = $"hiring-policy:{policy.InstallationId:N}:{policy.SetupStage}:{policy.Revision}:{retry}";

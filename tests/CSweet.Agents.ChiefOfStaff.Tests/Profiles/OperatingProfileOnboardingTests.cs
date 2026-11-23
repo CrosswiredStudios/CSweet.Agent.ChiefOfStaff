@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CSweet.Agent.SDK;
+using CSweet.Agent.Testing;
 using CSweet.Agents.ChiefOfStaff.Agent;
 using CSweet.Agents.ChiefOfStaff.Contracts;
 using CSweet.Agents.ChiefOfStaff.Orchestration;
@@ -310,6 +311,38 @@ public sealed class OperatingProfileOnboardingTests
         Assert.Single(harness.Messages);
         Assert.Empty(harness.Todos);
         Assert.DoesNotContain("focus", decision.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.All(decision.Options, option =>
+        {
+            Assert.StartsWith("I", option.Description);
+            Assert.False(string.IsNullOrWhiteSpace(option.Impact));
+            Assert.Contains("you", option.Description + " " + option.Impact, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact, Trait("Category", "AgentHarness")]
+    public async Task AutomaticHiringAnswerPresentsEvelynsAuthorityAndTheOwnersTradeoff()
+    {
+        var policy = new HiringPolicyResponse(Guid.NewGuid(), 0, new(), false, SetupStage: "mode");
+        var harness = new Harness("unused", hiringPolicy: policy);
+        var turn = Guid.NewGuid();
+        harness.Runtime.RegisterCapability<CaptureHiringPolicyDecisionRequest, HiringPolicyResponse>(HiringAutonomyCapabilities.CaptureDecision,
+            (request, _) =>
+            {
+                Assert.Equal(turn, request.AnswerTurnId);
+                return Task.FromResult(policy with { SetupStage = "level", Revision = 1 });
+            });
+        var host = new AgentTestHost(harness.Agent, harness.Runtime, businessId: harness.OrganizationId.ToString(), installationId: policy.InstallationId.ToString());
+        var answer = new UserMessageReceived(Guid.NewGuid(), harness.ConversationId.ToString(), Guid.NewGuid().ToString(),
+            "Decision: How should I help with hiring?\nAnswer: Automatic hiring", null, turn);
+        var result = await host.DeliverEventAsync(ChiefOfStaffProfile.UserMessageReceivedEvent, answer);
+        Assert.True(result.Succeeded, result.Error);
+        var decision = Assert.Single(harness.Decisions.Values);
+        Assert.Equal("How much automatic hiring authority should I have?", decision.Prompt);
+        var broad = Assert.Single(decision.Options, option => option.Id == "broad");
+        // The platform requires this disclosure in the description when it captures broad authority.
+        Assert.Contains("grant their requested permissions", broad.Description);
+        Assert.StartsWith("I could hire the leaders I recommend", broad.Description);
+        Assert.Contains("more access than you intended", broad.Impact);
     }
 
     [Fact]

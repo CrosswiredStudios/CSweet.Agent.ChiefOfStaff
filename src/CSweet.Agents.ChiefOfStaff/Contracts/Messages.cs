@@ -56,7 +56,7 @@ public sealed record ProposedAction(
     string ParametersJson,
     bool RequiresApproval);
 
-internal sealed record RequestUserInputOption(string Id, string Label, string? Description = null);
+internal sealed record RequestUserInputOption(string Id, string Label, string? Description = null, string? Impact = null);
 
 internal sealed record RequestUserInputRequest(
     Guid ConversationId,
