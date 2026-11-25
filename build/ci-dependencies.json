@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "packages": {
     "CSweet.Agent.SDK": {
+      "5.43.1": { "commit": "e684847ecce7f985336822bdec6ea0f7f9767880" },
       "5.21.1": {
         "commit": "f79faca29e65956f92de87da29ce08c78226d70d"
       }
     },
     "CSweet.WorkManagement.Contracts": {
+      "5.11.0": { "commit": "586642fe2ab857c595242ee5a03a8e5f2227a344" },
       "5.4.0": {
         "commit": "54fc4d4b593cbcd02183aa48374f9a677411fafb"
       }
